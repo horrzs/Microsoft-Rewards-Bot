@@ -1,9 +1,31 @@
 import Browser from '../browser/Browser'
 import { MicrosoftRewardsBot } from '../index'
+import type { AccountProxy } from '../interface/Account'
 import { log } from '../util/notifications/Logger'
 import { AccountCreator } from './AccountCreator'
 
 import * as readline from 'readline'
+
+function parseProxyArg(input?: string): AccountProxy | null {
+  if (!input) return null
+  try {
+    const candidate = input.match(/^[a-z]+:\/\//i) ? input : `http://${input}`
+    const parsed = new URL(candidate)
+    const url = `${parsed.protocol}//${parsed.hostname}`
+    const port = parsed.port ? Number(parsed.port) : parsed.protocol === 'https:' ? 443 : 80
+    return {
+      proxyAxios: true,
+      url,
+      port,
+      username: decodeURIComponent(parsed.username || ''),
+      password: decodeURIComponent(parsed.password || '')
+    }
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error)
+    log(false, 'CREATOR-CLI', `Invalid proxy provided: ${msg}`, 'warn', 'yellow')
+    return null
+  }
+}
 
 async function askForUrl(): Promise<string> {
   const rl = readline.createInterface({
@@ -25,6 +47,7 @@ async function main(): Promise<void> {
   let referralUrl: string | undefined
   let recoveryEmail: string | undefined
   let autoAccept = false
+  let proxyConfig: AccountProxy | null = parseProxyArg(process.env.CREATOR_PROXY_URL)
 
   // Parse arguments - ULTRA SIMPLE
   for (const arg of args) {
@@ -37,6 +60,8 @@ async function main(): Promise<void> {
     } else if (arg.includes('@')) {
       // Auto-detect email addresses
       recoveryEmail = arg
+    } else if (arg.startsWith('--proxy=')) {
+      proxyConfig = parseProxyArg(arg.substring('--proxy='.length))
     } else if (referralUrl && (arg.includes('=') || arg.startsWith('&'))) {
       // SMART FIX: Detect leftover URL fragments from CMD/PowerShell & splitting
       // When user forgets quotes, CMD splits at & and passes fragments as separate args
@@ -115,6 +140,12 @@ async function main(): Promise<void> {
     log(false, 'CREATOR-CLI', `✅ Recovery email: ${recoveryEmail}`, 'log', 'green')
   }
 
+  if (proxyConfig) {
+    log(false, 'CREATOR-CLI', `🔒 Using proxy: ${proxyConfig.url}:${proxyConfig.port}`, 'log', 'green')
+  } else {
+    log(false, 'CREATOR-CLI', '⚠️  No proxy provided for account creation; IP reuse increases ban risk. Pass --proxy=host:port or set CREATOR_PROXY_URL.', 'warn', 'yellow')
+  }
+
   if (autoAccept) {
     log(false, 'CREATOR-CLI', '⚡ Auto-accept mode ENABLED (-y flag detected)', 'log', 'green')
     log(false, 'CREATOR-CLI', '🤖 All prompts will be auto-accepted', 'log', 'cyan')
@@ -127,14 +158,16 @@ async function main(): Promise<void> {
 
   // Create a temporary bot instance to access browser creation
   const bot = new MicrosoftRewardsBot(false)
+  // Disable fingerprint persistence for creator to avoid reusing same fingerprint across many accounts
+  bot.config.saveFingerprint = { mobile: false, desktop: false }
+  bot.config.fingerprinting = { ...bot.config.fingerprinting, saveFingerprint: { mobile: false, desktop: false } }
   const browserFactory = new Browser(bot)
 
   try {
     // Create browser (non-headless for user interaction with CAPTCHA)
     log(false, 'CREATOR-CLI', 'Opening browser (required for CAPTCHA solving)...', 'log')
 
-    // Create empty proxy config (no proxy for account creation)
-    const emptyProxy = {
+    const effectiveProxy: AccountProxy = proxyConfig ?? {
       proxyAxios: false,
       url: '',
       port: 0,
@@ -142,7 +175,9 @@ async function main(): Promise<void> {
       username: ''
     }
 
-    const browserContext = await browserFactory.createBrowser(emptyProxy, 'account-creator')
+    // Use unique session id per creation to avoid fingerprint/cookie reuse between accounts
+    const sessionId = `account-creator-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
+    const browserContext = await browserFactory.createBrowser(effectiveProxy, sessionId)
 
     log(false, 'CREATOR-CLI', '✅ Browser opened successfully', 'log', 'green')
 
