@@ -1,4 +1,4 @@
-import { AxiosRequestConfig } from 'axios'
+import { AxiosError, AxiosRequestConfig } from 'axios'
 import { CheerioAPI, load } from 'cheerio'
 import { BrowserContext, Page } from 'rebrowser-playwright'
 
@@ -484,7 +484,18 @@ export default class BrowserFunc {
                 }
             }
 
-            const userDataResponse: AppUserData = (await this.bot.axios.request(userDataRequest)).data
+            let userDataResponse: AppUserData
+
+            try {
+                userDataResponse = (await this.bot.axios.request(userDataRequest)).data
+            } catch (requestError) {
+                if (this.isPlainHttpToHttpsPortError(requestError)) {
+                    this.bot.log(this.bot.isMobile, 'GET-APP-EARNABLE-POINTS', '[getAppEarnablePoints] Plain HTTP sent to HTTPS port - retrying without proxy', 'warn')
+                    userDataResponse = (await this.bot.axios.request(userDataRequest, true)).data
+                } else {
+                    throw requestError
+                }
+            }
             const userData = userDataResponse.response
             const eligibleActivities = userData.promotions.filter((x) => eligibleOffers.includes(x.attributes.offerid ?? ''))
 
@@ -512,6 +523,14 @@ export default class BrowserFunc {
             this.bot.log(this.bot.isMobile, 'GET-APP-EARNABLE-POINTS', `[getAppEarnablePoints] Failed to fetch app earnable points: ${errorMessage}`, 'error')
             throw error
         }
+    }
+
+    private isPlainHttpToHttpsPortError(error: unknown): boolean {
+        const axiosError = error as AxiosError | undefined
+        const status = axiosError?.response?.status
+        const data = axiosError?.response?.data
+        const body = typeof data === 'string' ? data : JSON.stringify(data ?? '')
+        return status === 400 && /plain\s+http\s+request\s+was\s+sent\s+to\s+https\s+port/i.test(body)
     }
 
     /**
