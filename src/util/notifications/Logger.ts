@@ -226,10 +226,19 @@ export function log(isMobile: boolean | 'main', title: string, message: string, 
     type LoggingCfg = { excludeFunc?: string[]; webhookExcludeFunc?: string[]; redactEmails?: boolean }
     const loggingCfg: LoggingCfg = logging || {}
     const shouldRedact = !!loggingCfg.redactEmails
-    const redact = (s: string) => shouldRedact ? s.replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/ig, (m) => {
-        const [u, d] = m.split('@'); return `${(u || '').slice(0, 2)}***@${d || ''}`
-    }) : s
-    const cleanStr = redact(`[${currentTime}] [PID: ${process.pid}] [${type.toUpperCase()}] ${platformText} [${title}] ${message}`)
+    const redactSensitive = (s: string) => {
+        const scrubbed = s
+            .replace(/:\/\/[A-Z0-9._%+-]+:[^@\s]+@/ig, '://***:***@')
+            .replace(/(token=|apikey=|auth=)[^\s&]+/ig, '$1***')
+
+        if (!shouldRedact) return scrubbed
+
+        return scrubbed.replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/ig, (m) => {
+            const [u, d] = m.split('@'); return `${(u || '').slice(0, 2)}***@${d || ''}`
+        })
+    }
+
+    const cleanStr = redactSensitive(`[${currentTime}] [PID: ${process.pid}] [${type.toUpperCase()}] ${platformText} [${title}] ${message}`)
 
     // Define conditions for sending to NTFY 
     const ntfyConditions = {
@@ -293,7 +302,7 @@ export function log(isMobile: boolean | 'main', title: string, message: string, 
         typeColor(`${typeIndicator}`),
         platformColor(`[${platformText}]`),
         chalk.bold(`[${title}]`),
-        iconPart + redact(message)
+        iconPart + redactSensitive(message)
     ].join(' ')
 
     const applyChalk = color && typeof chalk[color] === 'function' ? chalk[color] as (msg: string) => string : null

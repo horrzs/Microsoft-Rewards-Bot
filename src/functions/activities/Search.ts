@@ -228,6 +228,7 @@ export class Search extends Workers {
                 // Try dismissing overlays before interacting
                 await this.bot.browser.utils.tryDismissAllMessages(searchPage)
                 await this.bot.utils.wait(200)
+                await this.bot.browser.utils.humanizePage(searchPage)
 
                 let navigatedDirectly = false
                 try {
@@ -311,7 +312,7 @@ export class Search extends Workers {
                 data: `f.req=[[[i0OFE,"[null, null, \\"${geoLocale.toUpperCase()}\\", 0, null, 48]"]]]`
             }
 
-            const response = await this.bot.axios.request(request, this.bot.config.proxy.proxyGoogleTrends)
+            const response = await this.bot.axios.request(request, !this.bot.config.proxy.proxyGoogleTrends)
             const rawText = response.data
 
             const trendsData = this.extractJsonFromResponse(rawText)
@@ -368,7 +369,7 @@ export class Search extends Workers {
                 }
             }
 
-            const response = await this.bot.axios.request(request, this.bot.config.proxy.proxyBingTerms)
+            const response = await this.bot.axios.request(request, !this.bot.config.proxy.proxyBingTerms)
 
             return response.data[1] as string[]
         } catch (error) {

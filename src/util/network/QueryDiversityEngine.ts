@@ -1,5 +1,7 @@
-import axios from 'axios'
+import axios, { AxiosRequestConfig, AxiosResponse } from 'axios'
 import { Util } from '../core/Utils'
+
+type HttpClient = Pick<typeof axios, 'request'> | { request: (config: AxiosRequestConfig) => Promise<AxiosResponse> }
 
 export interface QueryDiversityConfig {
   sources: Array<'google-trends' | 'reddit' | 'news' | 'wikipedia' | 'local-fallback'>
@@ -18,8 +20,9 @@ export class QueryDiversityEngine {
   private cache: Map<string, { queries: string[]; expires: number }> = new Map()
   private util: Util = new Util()
   private logger?: (source: string, message: string, level?: 'info' | 'warn' | 'error') => void
+  private httpClient: HttpClient
 
-  constructor(config?: Partial<QueryDiversityConfig>, logger?: (source: string, message: string, level?: 'info' | 'warn' | 'error') => void) {
+  constructor(config?: Partial<QueryDiversityConfig>, logger?: (source: string, message: string, level?: 'info' | 'warn' | 'error'), httpClient?: HttpClient) {
     const maxQueriesPerSource = Math.max(1, Math.min(config?.maxQueriesPerSource || 10, 50))
     const cacheMinutes = Math.max(1, Math.min(config?.cacheMinutes || 30, 1440))
 
@@ -33,6 +36,7 @@ export class QueryDiversityEngine {
       cacheMinutes
     }
     this.logger = logger
+    this.httpClient = httpClient || axios
   }
 
   private log(source: string, message: string, level: 'info' | 'warn' | 'error' = 'info'): void {
@@ -51,7 +55,7 @@ export class QueryDiversityEngine {
     timeout?: number
   }): Promise<string> {
     try {
-      const response = await axios({
+      const response = await this.httpClient.request({
         url,
         method: config?.method || 'GET',
         headers: config?.headers || { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },

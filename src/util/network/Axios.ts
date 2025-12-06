@@ -99,9 +99,8 @@ class AxiosClient {
 
                 // Handle HTTP 407 Proxy Authentication Required
                 if (this.isProxyAuthError(err)) {
-                    // Retry without proxy on auth failure
-                    const bypassInstance = axios.create()
-                    return bypassInstance.request(config)
+                    const msg = err instanceof Error ? err.message : String(err)
+                    throw new Error(`Proxy authentication failed. Direct fallback disabled to avoid IP leakage. Details: ${msg}`)
                 }
 
                 // Handle retryable network errors
@@ -112,9 +111,6 @@ class AxiosClient {
                         await this.sleep(delayMs)
                         continue
                     }
-                    // Last attempt: try without proxy
-                    const bypassInstance = axios.create()
-                    return bypassInstance.request(config)
                 }
 
                 // Non-retryable error

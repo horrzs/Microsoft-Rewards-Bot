@@ -1,4 +1,5 @@
-﻿import chalk from 'chalk'
+﻿import type { AxiosRequestConfig } from 'axios'
+import chalk from 'chalk'
 import { spawn } from 'child_process'
 import type { Worker } from 'cluster'
 import cluster from 'cluster'
@@ -75,6 +76,7 @@ export class MicrosoftRewardsBot {
         this.accounts = []
         this.utils = new Util()
         this.config = loadConfig()
+        this.enforceHumanization()
         // JobState will be initialized in initialize() method after validation
         this.browser = {
             func: new BrowserFunc(this),
@@ -84,14 +86,6 @@ export class MicrosoftRewardsBot {
         this.workers = new Workers(this)
         this.humanizer = new Humanizer(this.utils, this.config.humanization)
         this.activeWorkers = this.config.clusters
-
-        if (this.config.queryDiversity?.enabled) {
-            this.queryEngine = new QueryDiversityEngine({
-                sources: this.config.queryDiversity.sources,
-                maxQueriesPerSource: this.config.queryDiversity.maxQueriesPerSource,
-                cacheMinutes: this.config.queryDiversity.cacheMinutes
-            })
-        }
     }
 
     async initialize() {
@@ -197,6 +191,35 @@ export class MicrosoftRewardsBot {
                 // Expected: File may be locked or already deleted - non-critical
             }
         }
+    }
+
+    private enforceHumanization(): void {
+        const allowDisable = process.env.ALLOW_HUMANIZATION_OFF === '1'
+        if (this.config?.humanization?.enabled === false && !allowDisable) {
+            log('main', 'HUMANIZATION', 'Humanization disabled in config; forcing it on for anti-detection safety (set ALLOW_HUMANIZATION_OFF=1 to override).', 'warn')
+            this.config.humanization = { ...this.config.humanization, enabled: true }
+        }
+    }
+
+    private buildQueryEngine(): QueryDiversityEngine | undefined {
+        if (!this.config.queryDiversity?.enabled) {
+            return undefined
+        }
+
+        const proxyHttpClient = {
+            request: (config: AxiosRequestConfig) => this.axios.request(config)
+        }
+
+        const logger = (source: string, message: string, level: 'info' | 'warn' | 'error' = 'info') => {
+            const mapped = level === 'error' ? 'error' : level === 'warn' ? 'warn' : 'log'
+            this.log(this.isMobile, source, message, mapped)
+        }
+
+        return new QueryDiversityEngine({
+            sources: this.config.queryDiversity.sources,
+            maxQueriesPerSource: this.config.queryDiversity.maxQueriesPerSource,
+            cacheMinutes: this.config.queryDiversity.cacheMinutes
+        }, logger, proxyHttpClient)
     }
 
     async run() {
@@ -502,6 +525,7 @@ export class MicrosoftRewardsBot {
             const banned = { status: false, reason: '' }
 
             this.axios = new Axios(account.proxy)
+            this.queryEngine = this.buildQueryEngine()
             const verbose = process.env.DEBUG_REWARDS_VERBOSE === '1'
 
             if (this.config.dryRun) {
@@ -525,6 +549,7 @@ export class MicrosoftRewardsBot {
             if (this.config.parallel) {
                 const mobileInstance = new MicrosoftRewardsBot(true)
                 mobileInstance.axios = this.axios
+                mobileInstance.queryEngine = this.queryEngine
 
                 // IMPROVED: Shared state to track desktop issues for early mobile abort consideration
                 let desktopDetectedIssue = false
