@@ -42,6 +42,7 @@ class Browser {
             const isLinux = process.platform === 'linux'
 
             // CRITICAL: Anti-detection Chromium arguments
+            // These arguments minimize bot detection fingerprints
             const baseArgs = [
                 '--no-sandbox',
                 '--mute-audio',
@@ -49,25 +50,52 @@ class Browser {
                 '--ignore-certificate-errors',
                 '--ignore-certificate-errors-spki-list',
                 '--ignore-ssl-errors',
-                // ANTI-DETECTION: Disable blink features that expose automation
+                // ANTI-DETECTION: Core automation hiding
                 '--disable-blink-features=AutomationControlled',
-                // ANTI-DETECTION: Disable automation extensions
+                '--disable-automation',
                 '--disable-extensions',
-                // ANTI-DETECTION: Start maximized (humans rarely start in specific window sizes)
+                // ANTI-DETECTION: Window behavior
                 '--start-maximized',
-                // ANTI-DETECTION: Disable save password bubble
-                '--disable-save-password-bubble',
-                // ANTI-DETECTION: Disable background timer throttling
-                '--disable-background-timer-throttling',
+                '--window-position=0,0',
+                // ANTI-DETECTION: Disable telemetry and tracking features
+                '--disable-client-side-phishing-detection',
+                '--disable-component-update',
+                '--disable-default-apps',
+                '--disable-domain-reliability',
+                '--disable-features=TranslateUI',
+                '--disable-hang-monitor',
+                '--disable-ipc-flooding-protection',
+                '--disable-popup-blocking',
+                '--disable-prompt-on-repost',
+                '--disable-sync',
+                // ANTI-DETECTION: WebRTC hardening
+                '--disable-webrtc-hw-encoding',
+                '--disable-webrtc-hw-decoding',
+                '--force-webrtc-ip-handling-policy=disable_non_proxied_udp',
+                // ANTI-DETECTION: Disable GPU features that leak info
+                '--disable-gpu-sandbox',
+                '--disable-accelerated-2d-canvas',
+                '--disable-gpu-compositing',
+                // ANTI-DETECTION: Disable features that identify headless mode
                 '--disable-backgrounding-occluded-windows',
                 '--disable-renderer-backgrounding',
-                // ANTI-DETECTION: Disable infobars
+                '--disable-background-timer-throttling',
+                '--disable-save-password-bubble',
                 '--disable-infobars',
-                // PERFORMANCE: Disable unnecessary features
+                // ANTI-DETECTION: Navigator properties
+                '--disable-features=site-per-process',
+                '--disable-features=IsolateOrigins',
+                // ANTI-DETECTION: Timing attack prevention
+                '--disable-features=ReduceUserAgent',
+                '--disable-features=ScriptStreaming',
+                // PERFORMANCE: Stability
                 '--disable-breakpad',
-                '--disable-component-update',
                 '--no-first-run',
-                '--no-default-browser-check'
+                '--no-default-browser-check',
+                '--no-zygote',
+                '--single-process',
+                // ANTI-DETECTION: Make WebDriver undetectable
+                '--enable-features=NetworkService,NetworkServiceInProcess'
             ]
 
             // Linux stability fixes

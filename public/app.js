@@ -1,128 +1,88 @@
 /**
  * Microsoft Rewards Bot Dashboard - Frontend JavaScript
- * 
- * Handles real-time updates, charts, bot control, and UI interactions
  */
 
-// ============================================================================
-// State Management
-// ============================================================================
-
+// State
 const state = {
     isRunning: false,
     autoScroll: true,
     logs: [],
     accounts: [],
-    stats: {
-        totalAccounts: 0,
-        totalPoints: 0,
-        completed: 0,
-        errors: 0,
-        startTime: null
-    },
-    pointsHistory: [],
-    activityStats: {},
+    stats: { totalAccounts: 0, totalPoints: 0, completed: 0, errors: 0, startTime: null },
     currentLogFilter: 'all',
     ws: null,
-    reconnectAttempts: 0,
-    maxReconnectAttempts: 10,
-    reconnectDelay: 1000
+    reconnectAttempts: 0
 }
 
-// Chart instances
 let pointsChart = null
 let activityChart = null
 
-// ============================================================================
-// Initialization
-// ============================================================================
-
+// Initialize on DOM ready
 document.addEventListener('DOMContentLoaded', () => {
-    initializeWebSocket()
-    initializeCharts()
+    initWebSocket()
+    initCharts()
     loadInitialData()
     startUptimeTimer()
-    loadThemePreference()
+    loadTheme()
 })
 
-// ============================================================================
-// WebSocket Connection
-// ============================================================================
-
-function initializeWebSocket() {
+// WebSocket
+function initWebSocket() {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const wsUrl = `${protocol}//${window.location.host}`
+    const wsUrl = protocol + '//' + window.location.host
 
     try {
         state.ws = new WebSocket(wsUrl)
 
-        state.ws.onopen = () => {
+        state.ws.onopen = function () {
             updateConnectionStatus(true)
             state.reconnectAttempts = 0
-            state.reconnectDelay = 1000
-            console.log('[WS] Connected to dashboard server')
+            console.log('[WS] Connected')
         }
 
-        state.ws.onmessage = (event) => {
+        state.ws.onmessage = function (event) {
             try {
-                const data = JSON.parse(event.data)
-                handleWebSocketMessage(data)
-            } catch (error) {
-                console.error('[WS] Failed to parse message:', error)
+                handleWsMessage(JSON.parse(event.data))
+            } catch (e) {
+                console.error('[WS] Parse error:', e)
             }
         }
 
-        state.ws.onclose = () => {
+        state.ws.onclose = function () {
             updateConnectionStatus(false)
-            console.log('[WS] Connection closed, attempting reconnect...')
             attemptReconnect()
         }
 
-        state.ws.onerror = (error) => {
-            console.error('[WS] Error:', error)
+        state.ws.onerror = function (e) {
+            console.error('[WS] Error:', e)
         }
-    } catch (error) {
-        console.error('[WS] Failed to connect:', error)
+    } catch (e) {
+        console.error('[WS] Failed:', e)
         attemptReconnect()
     }
 }
 
 function attemptReconnect() {
-    if (state.reconnectAttempts >= state.maxReconnectAttempts) {
-        showToast('Connection lost. Please refresh the page.', 'error')
+    if (state.reconnectAttempts >= 10) {
+        showToast('Connection lost. Please refresh.', 'error')
         return
     }
-
     state.reconnectAttempts++
-    state.reconnectDelay = Math.min(state.reconnectDelay * 1.5, 30000)
-
-    setTimeout(() => {
-        console.log(`[WS] Reconnect attempt ${state.reconnectAttempts}/${state.maxReconnectAttempts}`)
-        initializeWebSocket()
-    }, state.reconnectDelay)
+    setTimeout(initWebSocket, Math.min(1000 * Math.pow(1.5, state.reconnectAttempts), 30000))
 }
 
-function handleWebSocketMessage(data) {
-    // Handle init message with all initial data
+function handleWsMessage(data) {
     if (data.type === 'init' && data.data) {
-        if (data.data.logs) {
-            data.data.logs.forEach(log => addLogEntry(log))
-        }
-        if (data.data.status) {
-            updateBotStatus(data.data.status)
-        }
-        if (data.data.accounts) {
-            renderAccounts(data.data.accounts)
-        }
+        if (data.data.logs) data.data.logs.forEach(addLogEntry)
+        if (data.data.status) updateBotStatus(data.data.status)
+        if (data.data.accounts) renderAccounts(data.data.accounts)
         return
     }
 
-    // Handle payload format (from state listener) or data format (from broadcast)
     const payload = data.payload || data.data || data
 
     switch (data.type) {
         case 'log':
-            // Handle both { log: {...} } and direct log object
             addLogEntry(payload.log || payload)
             break
         case 'status':
@@ -138,30 +98,23 @@ function handleWebSocketMessage(data) {
         case 'accounts':
             renderAccounts(payload)
             break
-        case 'points':
-            updatePointsHistory(payload)
-            break
-        case 'activity':
-            updateActivityStats(payload)
-            break
-        default:
-            console.log('[WS] Unknown message type:', data.type)
     }
 }
 
 function updateConnectionStatus(connected) {
-    const statusEl = document.getElementById('connectionStatus')
-    if (statusEl) {
-        statusEl.className = `connection-status ${connected ? 'connected' : 'disconnected'}`
-        statusEl.innerHTML = `<i class="fas fa-circle"></i> ${connected ? 'Connected' : 'Disconnected'}`
+    const el = document.getElementById('connectionStatus')
+    if (el) {
+        el.className = 'connection-status ' + (connected ? 'connected' : 'disconnected')
+        el.innerHTML = '<i class="fas fa-circle"></i> ' + (connected ? 'Connected' : 'Disconnected')
     }
 }
 
-// ============================================================================
-// Charts Initialization
-// ============================================================================
-
-function initializeCharts() {
+// Charts
+function initCharts() {
+    if (typeof Chart === 'undefined') {
+        console.warn('Chart.js not loaded')
+        return
+    }
     initPointsChart()
     initActivityChart()
 }
@@ -179,7 +132,7 @@ function initPointsChart() {
         data: {
             labels: generateDateLabels(7),
             datasets: [{
-                label: 'Points Earned',
+                label: 'Points',
                 data: generatePlaceholderData(7),
                 borderColor: '#58a6ff',
                 backgroundColor: gradient,
@@ -187,59 +140,16 @@ function initPointsChart() {
                 fill: true,
                 tension: 0.4,
                 pointRadius: 4,
-                pointHoverRadius: 6,
-                pointBackgroundColor: '#58a6ff',
-                pointBorderColor: '#0d1117',
-                pointBorderWidth: 2
+                pointBackgroundColor: '#58a6ff'
             }]
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
-            interaction: {
-                intersect: false,
-                mode: 'index'
-            },
-            plugins: {
-                legend: {
-                    display: false
-                },
-                tooltip: {
-                    backgroundColor: '#161b22',
-                    titleColor: '#f0f6fc',
-                    bodyColor: '#8b949e',
-                    borderColor: '#30363d',
-                    borderWidth: 1,
-                    padding: 12,
-                    displayColors: false,
-                    callbacks: {
-                        label: (context) => `${context.parsed.y.toLocaleString()} points`
-                    }
-                }
-            },
+            plugins: { legend: { display: false } },
             scales: {
-                x: {
-                    grid: {
-                        color: '#21262d',
-                        drawBorder: false
-                    },
-                    ticks: {
-                        color: '#8b949e',
-                        font: { size: 11 }
-                    }
-                },
-                y: {
-                    grid: {
-                        color: '#21262d',
-                        drawBorder: false
-                    },
-                    ticks: {
-                        color: '#8b949e',
-                        font: { size: 11 },
-                        callback: (value) => value.toLocaleString()
-                    },
-                    beginAtZero: true
-                }
+                x: { grid: { color: '#21262d' }, ticks: { color: '#8b949e' } },
+                y: { grid: { color: '#21262d' }, ticks: { color: '#8b949e' }, beginAtZero: true }
             }
         }
     })
@@ -255,16 +165,9 @@ function initActivityChart() {
             labels: ['Searches', 'Daily Set', 'Punch Cards', 'Quizzes', 'Other'],
             datasets: [{
                 data: [45, 25, 15, 10, 5],
-                backgroundColor: [
-                    '#58a6ff',
-                    '#3fb950',
-                    '#d29922',
-                    '#a371f7',
-                    '#39c5cf'
-                ],
+                backgroundColor: ['#58a6ff', '#3fb950', '#d29922', '#a371f7', '#39c5cf'],
                 borderColor: '#161b22',
-                borderWidth: 3,
-                hoverOffset: 8
+                borderWidth: 3
             }]
         },
         options: {
@@ -274,24 +177,7 @@ function initActivityChart() {
             plugins: {
                 legend: {
                     position: 'right',
-                    labels: {
-                        color: '#8b949e',
-                        font: { size: 11 },
-                        padding: 15,
-                        usePointStyle: true,
-                        pointStyle: 'circle'
-                    }
-                },
-                tooltip: {
-                    backgroundColor: '#161b22',
-                    titleColor: '#f0f6fc',
-                    bodyColor: '#8b949e',
-                    borderColor: '#30363d',
-                    borderWidth: 1,
-                    padding: 12,
-                    callbacks: {
-                        label: (context) => `${context.label}: ${context.parsed}%`
-                    }
+                    labels: { color: '#8b949e', font: { size: 11 } }
                 }
             }
         }
@@ -301,15 +187,14 @@ function initActivityChart() {
 function generateDateLabels(days) {
     const labels = []
     for (let i = days - 1; i >= 0; i--) {
-        const date = new Date()
-        date.setDate(date.getDate() - i)
-        labels.push(date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }))
+        const d = new Date()
+        d.setDate(d.getDate() - i)
+        labels.push(d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }))
     }
     return labels
 }
 
 function generatePlaceholderData(count) {
-    // Generate realistic-looking placeholder data
     const data = []
     let base = 150
     for (let i = 0; i < count; i++) {
@@ -320,11 +205,9 @@ function generatePlaceholderData(count) {
 }
 
 function setChartPeriod(period, btn) {
-    // Update button states
-    document.querySelectorAll('.period-btn').forEach(b => b.classList.remove('active'))
+    document.querySelectorAll('.period-btn').forEach((b) => { b.classList.remove('active') })
     btn.classList.add('active')
 
-    // Update chart data
     const days = period === '7d' ? 7 : 30
     if (pointsChart) {
         pointsChart.data.labels = generateDateLabels(days)
@@ -333,164 +216,129 @@ function setChartPeriod(period, btn) {
     }
 }
 
-// ============================================================================
 // Data Loading
-// ============================================================================
-
-async function loadInitialData() {
-    try {
-        const [statusRes, accountsRes] = await Promise.all([
-            fetch('/api/status'),
-            fetch('/api/accounts')
-        ])
-
-        if (statusRes.ok) {
-            const status = await statusRes.json()
-            updateBotStatus(status)
-        }
-
-        if (accountsRes.ok) {
-            const accounts = await accountsRes.json()
-            renderAccounts(accounts)
-        }
-    } catch (error) {
-        console.error('Failed to load initial data:', error)
-    }
+function loadInitialData() {
+    fetch('/api/status').then((r) => { return r.json() }).then(updateBotStatus).catch(() => { })
+    fetch('/api/accounts').then((r) => { return r.json() }).then(renderAccounts).catch(() => { })
 }
 
-async function refreshData() {
-    const btn = document.querySelector('[onclick="refreshData()"]')
-    if (btn) {
-        btn.querySelector('i').classList.add('fa-spin')
-    }
-
-    await loadInitialData()
-
+function refreshData() {
+    var btn = document.querySelector('[onclick="refreshData()"] i')
+    if (btn) btn.classList.add('fa-spin')
+    loadInitialData()
     setTimeout(() => {
-        if (btn) {
-            btn.querySelector('i').classList.remove('fa-spin')
-        }
+        if (btn) btn.classList.remove('fa-spin')
         showToast('Data refreshed', 'success')
     }, 500)
 }
 
-// ============================================================================
 // Bot Control
-// ============================================================================
-
-async function startBot() {
-    try {
-        updateButtonStates(true)
-        const response = await fetch('/api/start', { method: 'POST' })
-        const result = await response.json()
-
-        if (response.ok) {
-            state.isRunning = true
-            state.stats.startTime = Date.now()
-            updateBotStatus({ running: true })
-            showToast('Bot started successfully', 'success')
-        } else {
+function startBot() {
+    updateButtonStates(true)
+    fetch('/api/start', { method: 'POST' })
+        .then((r) => { return r.json() })
+        .then((result) => {
+            if (result.success || result.pid) {
+                state.isRunning = true
+                state.stats.startTime = Date.now()
+                updateBotStatus({ running: true })
+                showToast('Bot started', 'success')
+            } else {
+                updateButtonStates(false)
+                showToast(result.error || 'Failed to start', 'error')
+            }
+        })
+        .catch((e) => {
             updateButtonStates(false)
-            showToast(result.error || 'Failed to start bot', 'error')
-        }
-    } catch (error) {
-        updateButtonStates(false)
-        showToast('Failed to start bot: ' + error.message, 'error')
-    }
+            showToast('Failed: ' + e.message, 'error')
+        })
 }
 
-async function stopBot() {
-    try {
-        const response = await fetch('/api/stop', { method: 'POST' })
-        const result = await response.json()
-
-        if (response.ok) {
-            state.isRunning = false
-            updateBotStatus({ running: false })
-            showToast('Bot stopped', 'info')
-        } else {
-            showToast(result.error || 'Failed to stop bot', 'error')
-        }
-    } catch (error) {
-        showToast('Failed to stop bot: ' + error.message, 'error')
-    }
+function stopBot() {
+    fetch('/api/stop', { method: 'POST' })
+        .then((r) => { return r.json() })
+        .then((result) => {
+            if (result.success) {
+                state.isRunning = false
+                updateBotStatus({ running: false })
+                showToast('Bot stopped', 'info')
+            } else {
+                showToast(result.error || 'Failed to stop', 'error')
+            }
+        })
+        .catch((e) => {
+            showToast('Failed: ' + e.message, 'error')
+        })
 }
 
-async function restartBot() {
-    try {
-        showToast('Restarting bot...', 'info')
-        const response = await fetch('/api/restart', { method: 'POST' })
-        const result = await response.json()
-
-        if (response.ok) {
-            state.stats.startTime = Date.now()
-            showToast('Bot restarted successfully', 'success')
-        } else {
-            showToast(result.error || 'Failed to restart bot', 'error')
-        }
-    } catch (error) {
-        showToast('Failed to restart bot: ' + error.message, 'error')
-    }
+function restartBot() {
+    showToast('Restarting...', 'info')
+    fetch('/api/restart', { method: 'POST' })
+        .then((r) => { return r.json() })
+        .then((result) => {
+            if (result.success) {
+                state.stats.startTime = Date.now()
+                showToast('Bot restarted', 'success')
+            } else {
+                showToast(result.error || 'Failed to restart', 'error')
+            }
+        })
+        .catch((e) => {
+            showToast('Failed: ' + e.message, 'error')
+        })
 }
 
-async function resetJobState() {
-    showModal(
-        'Reset Job State',
-        '<p>This will clear all completed task records for today, allowing the bot to re-run all activities.</p><p style="color: var(--accent-orange); margin-top: 1rem;"><i class="fas fa-exclamation-triangle"></i> This action cannot be undone.</p>',
+function resetJobState() {
+    showModal('Reset Job State',
+        '<p>This will clear all completed task records for today.</p>' +
+        '<p style="color: var(--accent-orange); margin-top: 1rem;">' +
+        '<i class="fas fa-exclamation-triangle"></i> This cannot be undone.</p>',
         [
-            { text: 'Cancel', class: 'btn btn-secondary', onclick: 'closeModal()' },
-            { text: 'Reset', class: 'btn btn-danger', onclick: 'confirmResetJobState()' }
+            { text: 'Cancel', cls: 'btn btn-secondary', action: 'closeModal()' },
+            { text: 'Reset', cls: 'btn btn-danger', action: 'confirmResetJobState()' }
         ]
     )
 }
 
-async function confirmResetJobState() {
+function confirmResetJobState() {
     closeModal()
-    try {
-        const response = await fetch('/api/reset-state', { method: 'POST' })
-        const result = await response.json()
-
-        if (response.ok) {
-            showToast('Job state reset successfully', 'success')
-            state.stats.completed = 0
-            state.stats.errors = 0
-            updateStatsDisplay()
-        } else {
-            showToast(result.error || 'Failed to reset state', 'error')
-        }
-    } catch (error) {
-        showToast('Failed to reset state: ' + error.message, 'error')
-    }
+    fetch('/api/reset-state', { method: 'POST' })
+        .then((r) => { return r.json() })
+        .then((result) => {
+            if (result.success) {
+                showToast('Job state reset', 'success')
+                state.stats.completed = 0
+                state.stats.errors = 0
+                updateStatsDisplay()
+            } else {
+                showToast(result.error || 'Failed to reset', 'error')
+            }
+        })
+        .catch((e) => {
+            showToast('Failed: ' + e.message, 'error')
+        })
 }
 
 function updateButtonStates(running) {
-    const btnStart = document.getElementById('btnStart')
-    const btnStop = document.getElementById('btnStop')
-
+    var btnStart = document.getElementById('btnStart')
+    var btnStop = document.getElementById('btnStop')
     if (btnStart) btnStart.disabled = running
     if (btnStop) btnStop.disabled = !running
 }
 
-// ============================================================================
 // Status Updates
-// ============================================================================
-
 function updateBotStatus(status) {
     state.isRunning = status.running
     updateButtonStates(status.running)
 
-    const badge = document.getElementById('statusBadge')
+    var badge = document.getElementById('statusBadge')
     if (badge) {
-        badge.className = `status-badge ${status.running ? 'status-running' : 'status-stopped'}`
-        badge.innerHTML = `<i class="fas fa-circle"></i><span>${status.running ? 'RUNNING' : 'STOPPED'}</span>`
+        badge.className = 'status-badge ' + (status.running ? 'status-running' : 'status-stopped')
+        badge.innerHTML = '<i class="fas fa-circle"></i><span>' + (status.running ? 'RUNNING' : 'STOPPED') + '</span>'
     }
 
     if (status.startTime) {
         state.stats.startTime = new Date(status.startTime).getTime()
-    }
-
-    if (status.memory) {
-        document.getElementById('memory').textContent = formatBytes(status.memory)
     }
 }
 
@@ -499,46 +347,29 @@ function updateStats(stats) {
     if (stats.totalPoints !== undefined) state.stats.totalPoints = stats.totalPoints
     if (stats.completed !== undefined) state.stats.completed = stats.completed
     if (stats.errors !== undefined) state.stats.errors = stats.errors
-
     updateStatsDisplay()
 }
 
 function updateStatsDisplay() {
-    document.getElementById('totalAccounts').textContent = state.stats.totalAccounts
-    document.getElementById('totalPoints').textContent = state.stats.totalPoints.toLocaleString()
-    document.getElementById('completed').textContent = state.stats.completed
-    document.getElementById('errors').textContent = state.stats.errors
-
-    // Update accounts badge
-    const badge = document.getElementById('accountsBadge')
-    if (badge) badge.textContent = state.stats.totalAccounts
+    var el
+    el = document.getElementById('totalAccounts')
+    if (el) el.textContent = state.stats.totalAccounts
+    el = document.getElementById('totalPoints')
+    if (el) el.textContent = state.stats.totalPoints.toLocaleString()
+    el = document.getElementById('completed')
+    if (el) el.textContent = state.stats.completed
+    el = document.getElementById('errors')
+    if (el) el.textContent = state.stats.errors
+    el = document.getElementById('accountsBadge')
+    if (el) el.textContent = state.stats.totalAccounts
 }
 
-function updatePointsHistory(data) {
-    if (pointsChart && data.labels && data.values) {
-        pointsChart.data.labels = data.labels
-        pointsChart.data.datasets[0].data = data.values
-        pointsChart.update('none')
-    }
-}
-
-function updateActivityStats(data) {
-    if (activityChart && data.labels && data.values) {
-        activityChart.data.labels = data.labels
-        activityChart.data.datasets[0].data = data.values
-        activityChart.update('none')
-    }
-}
-
-// ============================================================================
-// Accounts Management
-// ============================================================================
-
+// Accounts
 function renderAccounts(accounts) {
     state.accounts = accounts
     state.stats.totalAccounts = accounts.length
 
-    const container = document.getElementById('accountsList')
+    var container = document.getElementById('accountsList')
     if (!container) return
 
     if (accounts.length === 0) {
@@ -546,32 +377,31 @@ function renderAccounts(accounts) {
         return
     }
 
-    container.innerHTML = accounts.map(account => {
-        const initial = (account.email || 'U')[0].toUpperCase()
-        const displayEmail = account.email ? maskEmail(account.email) : 'Unknown'
-        const statusClass = account.status || 'pending'
-        const statusText = statusClass.charAt(0).toUpperCase() + statusClass.slice(1)
+    var html = ''
+    accounts.forEach((account) => {
+        var initial = (account.email || 'U')[0].toUpperCase()
+        var displayEmail = account.email ? maskEmail(account.email) : 'Unknown'
+        var statusClass = account.status || 'pending'
+        var statusText = statusClass.charAt(0).toUpperCase() + statusClass.slice(1)
 
-        return `
-            <div class="account-item" data-email="${account.email || ''}">
-                <div class="account-info">
-                    <div class="account-avatar">${initial}</div>
-                    <span class="account-email">${displayEmail}</span>
-                </div>
-                <span class="account-status ${statusClass}">${statusText}</span>
-            </div>
-        `
-    }).join('')
-
+        html += '<div class="account-item" data-email="' + (account.email || '') + '">' +
+            '<div class="account-info">' +
+            '<div class="account-avatar">' + initial + '</div>' +
+            '<span class="account-email">' + displayEmail + '</span>' +
+            '</div>' +
+            '<span class="account-status ' + statusClass + '">' + statusText + '</span>' +
+            '</div>'
+    })
+    container.innerHTML = html
     updateStatsDisplay()
 }
 
 function updateAccountStatus(data) {
-    const accountEl = document.querySelector(`.account-item[data-email="${data.email}"]`)
+    var accountEl = document.querySelector('.account-item[data-email="' + data.email + '"]')
     if (accountEl) {
-        const statusEl = accountEl.querySelector('.account-status')
+        var statusEl = accountEl.querySelector('.account-status')
         if (statusEl) {
-            statusEl.className = `account-status ${data.status}`
+            statusEl.className = 'account-status ' + data.status
             statusEl.textContent = data.status.charAt(0).toUpperCase() + data.status.slice(1)
         }
     }
@@ -579,95 +409,87 @@ function updateAccountStatus(data) {
 
 function maskEmail(email) {
     if (!email) return 'Unknown'
-    const [local, domain] = email.split('@')
-    if (!domain) return email
-    const masked = local.length > 3
-        ? local.slice(0, 2) + '***' + local.slice(-1)
-        : local[0] + '***'
-    return `${masked}@${domain}`
+    var parts = email.split('@')
+    if (parts.length < 2) return email
+    var local = parts[0]
+    var domain = parts[1]
+    var masked = local.length > 3 ? local.slice(0, 2) + '***' + local.slice(-1) : local[0] + '***'
+    return masked + '@' + domain
 }
 
-// ============================================================================
 // Logging
-// ============================================================================
-
 function addLogEntry(log) {
-    const container = document.getElementById('logsContainer')
+    var container = document.getElementById('logsContainer')
     if (!container) return
 
-    // Remove empty state message
-    const emptyMsg = container.querySelector('.log-empty')
+    var emptyMsg = container.querySelector('.log-empty')
     if (emptyMsg) emptyMsg.remove()
 
-    // Normalize log format (server uses 'title' and 'platform', frontend uses 'source')
-    const normalizedLog = {
+    var normalizedLog = {
         timestamp: log.timestamp || new Date().toISOString(),
         level: log.level || 'log',
         source: log.source || log.title || 'BOT',
-        message: log.message || '',
-        platform: log.platform
+        message: log.message || ''
     }
 
-    // Store log
     state.logs.push(normalizedLog)
 
-    // Check filter
     if (state.currentLogFilter !== 'all' && normalizedLog.level !== state.currentLogFilter) {
         return
     }
 
-    // Create log entry
-    const entry = document.createElement('div')
+    var entry = document.createElement('div')
     entry.className = 'log-entry'
-    entry.innerHTML = `
-        <span class="log-time">${formatTime(normalizedLog.timestamp)}</span>
-        <span class="log-level ${normalizedLog.level}">${normalizedLog.level}</span>
-        <span class="log-source">[${normalizedLog.source}]</span>
-        <span class="log-message">${escapeHtml(normalizedLog.message)}</span>
+    entry.innerHTML = '<span class="log-time">' + formatTime(normalizedLog.timestamp) + '</span>' +
+        '<span class="log-level ' + normalizedLog.level + '">' + normalizedLog.level + '</span>' +
+        '<span class="log-source">[' + normalizedLog.source + ']</span>' +
+        '<span class="log-message">' + escapeHtml(normalizedLog.message) + '</span>'
 
-    // Auto-scroll
+    container.appendChild(entry)
+
+    while (container.children.length > 500) {
+        container.removeChild(container.firstChild)
+    }
+
     if (state.autoScroll) {
         container.scrollTop = container.scrollHeight
     }
 }
 
 function filterLogs() {
-    const filter = document.getElementById('logFilter')
+    var filter = document.getElementById('logFilter')
     if (!filter) return
 
     state.currentLogFilter = filter.value
 
-    const container = document.getElementById('logsContainer')
+    var container = document.getElementById('logsContainer')
     if (!container) return
 
-    // Clear and re-render
     container.innerHTML = ''
 
-    const filteredLogs = state.currentLogFilter === 'all'
+    var filtered = state.currentLogFilter === 'all'
         ? state.logs
-        : state.logs.filter(log => log.level === state.currentLogFilter)
+        : state.logs.filter((log) => { return log.level === state.currentLogFilter })
 
-    if (filteredLogs.length === 0) {
+    if (filtered.length === 0) {
         container.innerHTML = '<div class="log-empty">No logs to display</div>'
         return
     }
 
-    filteredLogs.forEach(log => {
-        const entry = document.createElement('div')
+    filtered.forEach((log) => {
+        var entry = document.createElement('div')
         entry.className = 'log-entry'
-        entry.innerHTML = `
-        < span class="log-time" > ${ formatTime(log.timestamp || new Date()) }</span >
-            <span class="log-level ${log.level || 'log'}">${log.level || 'log'}</span>
-            <span class="log-source">[${log.source || 'BOT'}]</span>
-            <span class="log-message">${escapeHtml(log.message || '')}</span>
-    `
+        entry.innerHTML = '<span class="log-time">' + formatTime(log.timestamp) + '</span>' +
+            '<span class="log-level ' + log.level + '">' + log.level + '</span>' +
+            '<span class="log-source">[' + log.source + ']</span>' +
+            '<span class="log-message">' + escapeHtml(log.message) + '</span>'
         container.appendChild(entry)
     })
 }
 
 function clearLogs() {
     state.logs = []
-    const container = document.getElementById('logsContainer')
+    var container = document.getElementById('logsContainer')
     if (container) {
         container.innerHTML = '<div class="log-empty">No logs to display</div>'
     }
@@ -676,55 +498,41 @@ function clearLogs() {
 
 function toggleAutoScroll() {
     state.autoScroll = !state.autoScroll
-    const btn = document.getElementById('btnAutoScroll')
+    var btn = document.getElementById('btnAutoScroll')
     if (btn) {
         btn.classList.toggle('btn-primary', state.autoScroll)
         btn.classList.toggle('btn-secondary', !state.autoScroll)
     }
-    showToast(`Auto - scroll ${ state.autoScroll ? 'enabled' : 'disabled' } `, 'info')
+    showToast('Auto-scroll ' + (state.autoScroll ? 'enabled' : 'disabled'), 'info')
 }
 
-// ============================================================================
 // Quick Actions
-// ============================================================================
-
 function runSingleAccount() {
     if (state.accounts.length === 0) {
         showToast('No accounts available', 'warning')
         return
     }
 
-    const options = state.accounts.map(a =>
-        `< option value = "${a.email}" > ${ maskEmail(a.email) }</option > `
-    ).join('')
+    var options = state.accounts.map((a) => {
+        return '<option value="' + a.email + '">' + maskEmail(a.email) + '</option>'
+    }).join('')
 
-    showModal(
-        'Run Single Account',
-        `< p style = "margin-bottom: 1rem;" > Select an account to run:</p >
-        <select id="singleAccountSelect" class="log-filter" style="width: 100%; padding: 0.5rem;">
-            ${options}
-        </select>`,
+    showModal('Run Single Account',
+        '<p style="margin-bottom: 1rem;">Select an account to run:</p>' +
+        '<select id="singleAccountSelect" class="log-filter" style="width: 100%; padding: 0.5rem;">' +
+        options + '</select>',
         [
-            { text: 'Cancel', class: 'btn btn-secondary', onclick: 'closeModal()' },
-            { text: 'Run', class: 'btn btn-primary', onclick: 'executeSingleAccount()' }
+            { text: 'Cancel', cls: 'btn btn-secondary', action: 'closeModal()' },
+            { text: 'Run', cls: 'btn btn-primary', action: 'executeSingleAccount()' }
         ]
     )
 }
 
-async function executeSingleAccount() {
-    const select = document.getElementById('singleAccountSelect')
+function executeSingleAccount() {
+    var select = document.getElementById('singleAccountSelect')
     if (!select) return
-
-    const email = select.value
     closeModal()
-
-    try {
-        showToast(`Running account: ${ maskEmail(email) } `, 'info')
-        // API call would go here
-        // await fetch('/api/run-single', { method: 'POST', body: JSON.stringify({ email }) })
-    } catch (error) {
-        showToast('Failed to run account: ' + error.message, 'error')
-    }
+    showToast('Running account: ' + maskEmail(select.value), 'info')
 }
 
 function exportLogs() {
@@ -733,18 +541,17 @@ function exportLogs() {
         return
     }
 
-    const logText = state.logs.map(log =>
-        `[${ formatTime(log.timestamp) }][${ log.level?.toUpperCase() || 'LOG' }][${ log.source || 'BOT' }] ${ log.message } `
-    ).join('\n')
+    var logText = state.logs.map((log) => {
+        return '[' + formatTime(log.timestamp) + '] [' + (log.level || 'LOG').toUpperCase() + '] [' + (log.source || 'BOT') + '] ' + log.message
+    }).join('\n')
 
-    const blob = new Blob([logText], { type: 'text/plain' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
+    var blob = new Blob([logText], { type: 'text/plain' })
+    var url = URL.createObjectURL(blob)
+    var a = document.createElement('a')
     a.href = url
-    a.download = `rewards - bot - logs - ${ new Date().toISOString().slice(0, 10) }.txt`
+    a.download = 'rewards-bot-logs-' + new Date().toISOString().slice(0, 10) + '.txt'
     a.click()
     URL.revokeObjectURL(url)
-
     showToast('Logs exported', 'success')
 }
 
@@ -756,106 +563,85 @@ function viewHistory() {
     showToast('History viewer coming soon', 'info')
 }
 
-// ============================================================================
 // UI Utilities
-// ============================================================================
-
-function showToast(message, type = 'info') {
-    const container = document.getElementById('toastContainer')
+function showToast(message, type) {
+    type = type || 'info'
+    var container = document.getElementById('toastContainer')
     if (!container) return
 
-    const toast = document.createElement('div')
-    toast.className = `toast ${ type } `
+    var toast = document.createElement('div')
+    toast.className = 'toast ' + type
 
-    const icons = {
+    var icons = {
         success: 'fa-check-circle',
         error: 'fa-times-circle',
         warning: 'fa-exclamation-circle',
         info: 'fa-info-circle'
     }
 
-    toast.innerHTML = `
-        < i class="fas ${icons[type] || icons.info}" ></i >
-            <span>${message}</span>
-    `
-
+    toast.innerHTML = '<i class="fas ' + (icons[type] || icons.info) + '"></i><span>' + message + '</span>'
     container.appendChild(toast)
 
     setTimeout(() => {
         toast.style.animation = 'slideIn 0.3s ease reverse'
-        setTimeout(() => toast.remove(), 300)
+        setTimeout(() => { toast.remove() }, 300)
     }, 4000)
 }
 
-function showModal(title, body, buttons = []) {
-    const modal = document.getElementById('modal')
-    const modalTitle = document.getElementById('modalTitle')
-    const modalBody = document.getElementById('modalBody')
-    const modalFooter = document.getElementById('modalFooter')
+function showModal(title, body, buttons) {
+    var modal = document.getElementById('modal')
+    var modalTitle = document.getElementById('modalTitle')
+    var modalBody = document.getElementById('modalBody')
+    var modalFooter = document.getElementById('modalFooter')
 
     if (!modal || !modalTitle || !modalBody || !modalFooter) return
 
     modalTitle.textContent = title
     modalBody.innerHTML = body
 
-    modalFooter.innerHTML = buttons.map(btn =>
-        `< button class="${btn.class}" onclick = "${btn.onclick}" > ${ btn.text }</button > `
-    ).join('')
+    var footerHtml = '';
+    (buttons || []).forEach((btn) => {
+        footerHtml += '<button class="' + btn.cls + '" onclick="' + btn.action + '">' + btn.text + '</button>'
+    })
+    modalFooter.innerHTML = footerHtml
 
     modal.classList.add('show')
 }
 
 function closeModal() {
-    const modal = document.getElementById('modal')
+    var modal = document.getElementById('modal')
     if (modal) modal.classList.remove('show')
 }
 
-// Close modal on backdrop click
-document.addEventListener('click', (e) => {
-    if (e.target.classList.contains('modal')) {
-        closeModal()
-    }
-})
-
-// Close modal on Escape
-document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') {
-        closeModal()
-    }
-})
-
-// ============================================================================
 // Theme
-// ============================================================================
-
 function toggleTheme() {
     document.body.classList.toggle('light-theme')
-    const isLight = document.body.classList.contains('light-theme')
-    localStorage.setItem('theme', isLight ? 'light' : 'dark')
+    var isLight = document.body.classList.contains('light-theme')
+    try {
+        localStorage.setItem('theme', isLight ? 'light' : 'dark')
+    } catch (e) { }
 
-    // Update icon
-    const btn = document.querySelector('.theme-toggle i')
-    if (btn) {
-        btn.className = isLight ? 'fas fa-sun' : 'fas fa-moon'
-    }
+    var btn = document.querySelector('.theme-toggle i')
+    if (btn) btn.className = isLight ? 'fas fa-sun' : 'fas fa-moon'
 
-    // Update charts for theme
     updateChartsTheme(isLight)
 }
 
-function loadThemePreference() {
-    const theme = localStorage.getItem('theme')
-    if (theme === 'light') {
-        document.body.classList.add('light-theme')
-        const btn = document.querySelector('.theme-toggle i')
-        if (btn) btn.className = 'fas fa-sun'
-        updateChartsTheme(true)
-    }
+function loadTheme() {
+    try {
+        var theme = localStorage.getItem('theme')
+        if (theme === 'light') {
+            document.body.classList.add('light-theme')
+            var btn = document.querySelector('.theme-toggle i')
+            if (btn) btn.className = 'fas fa-sun'
+            updateChartsTheme(true)
+        }
+    } catch (e) { }
 }
 
 function updateChartsTheme(isLight) {
-    const gridColor = isLight ? '#eaeef2' : '#21262d'
-    const textColor = isLight ? '#656d76' : '#8b949e'
+    var gridColor = isLight ? '#eaeef2' : '#21262d'
+    var textColor = isLight ? '#656d76' : '#8b949e'
 
     if (pointsChart) {
         pointsChart.options.scales.x.grid.color = gridColor
@@ -871,65 +657,46 @@ function updateChartsTheme(isLight) {
     }
 }
 
-// ============================================================================
 // Uptime Timer
-// ============================================================================
-
 function startUptimeTimer() {
     setInterval(() => {
         if (state.isRunning && state.stats.startTime) {
-            const elapsed = Date.now() - state.stats.startTime
-            document.getElementById('uptime').textContent = formatDuration(elapsed)
+            var elapsed = Date.now() - state.stats.startTime
+            var el = document.getElementById('uptime')
+            if (el) el.textContent = formatDuration(elapsed)
         }
     }, 1000)
 }
 
-// ============================================================================
-// Formatting Utilities
-// ============================================================================
-
+// Formatting
 function formatTime(timestamp) {
-    const date = new Date(timestamp)
-    return date.toLocaleTimeString('en-US', {
-        hour12: false,
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit'
-    })
+    var d = new Date(timestamp)
+    return d.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })
 }
 
 function formatDuration(ms) {
-    const seconds = Math.floor(ms / 1000)
-    const hours = Math.floor(seconds / 3600)
-    const minutes = Math.floor((seconds % 3600) / 60)
-    const secs = seconds % 60
-
-    return [hours, minutes, secs]
-        .map(v => v.toString().padStart(2, '0'))
-        .join(':')
+    var secs = Math.floor(ms / 1000)
+    var hrs = Math.floor(secs / 3600)
+    var mins = Math.floor((secs % 3600) / 60)
+    var s = secs % 60
+    return pad(hrs) + ':' + pad(mins) + ':' + pad(s)
 }
 
-function formatBytes(bytes) {
-    if (bytes === 0) return '0 MB'
-    const mb = bytes / (1024 * 1024)
-    return `${ mb.toFixed(1) } MB`
+function pad(n) {
+    return n < 10 ? '0' + n : '' + n
 }
 
 function escapeHtml(text) {
-    const div = document.createElement('div')
+    var div = document.createElement('div')
     div.textContent = text
     return div.innerHTML
 }
 
-// ============================================================================
-// Global Error Handler
-// ============================================================================
+// Event listeners
+document.addEventListener('click', (e) => {
+    if (e.target.classList.contains('modal')) closeModal()
+})
 
-window.onerror = (message, source, lineno, colno, error) => {
-    console.error('Global error:', { message, source, lineno, colno, error })
-    return false
-}
-
-window.onunhandledrejection = (event) => {
-    console.error('Unhandled rejection:', event.reason)
-}
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeModal()
+})
