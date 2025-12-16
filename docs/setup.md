@@ -1,25 +1,85 @@
 # Setup
 
-Get the bot ready before running it.
+Get the bot ready before your first run.
 
-## What it does
-Creates a safe baseline so your accounts and config are ready.
+## Prerequisites
+- **Node.js 20 or newer** - [Download here](https://nodejs.org/)
+- **Git** (optional) - For cloning the repository
 
-## How to use
-1. Install Node.js 20 or newer.
-2. Copy `src/accounts.example.jsonc` to `src/accounts.jsonc` and fill in your accounts.
-3. Review `src/config.jsonc`; defaults work for most people.
-4. (Optional) set `DISCORD_WEBHOOK_URL` in your environment for alerts.
+## Installation
 
-## Example
+```bash
+# Clone the repository
+git clone https://github.com/LightZirconite/Microsoft-Rewards-Bot.git
+cd Microsoft-Rewards-Bot
+
+# Install dependencies (happens automatically on first run)
+npm install
+```
+
+## Account Configuration
+
+1. Copy the example file:
+   ```bash
+   cp src/accounts.example.jsonc src/accounts.jsonc
+   ```
+
+2. Edit src/accounts.jsonc with your Microsoft account(s):
+
 ```jsonc
 [
   {
-    "email": "you@example.com",
+    "email": "your-email@outlook.com",
     "password": "your-password"
+  },
+  {
+    "email": "second-account@outlook.com",
+    "password": "another-password",
+    "totp": "YOUR_2FA_SECRET"  // Optional: for accounts with 2FA
   }
 ]
 ```
 
+## Optional: 2FA Support
+If your account has two-factor authentication enabled, add the TOTP secret:
+- Extract the secret from your authenticator app setup QR code
+- Add it as the totp field in your account entry
+
+## Optional: Proxy Support
+For accounts that need a proxy:
+```jsonc
+{
+  "email": "account@outlook.com",
+  "password": "password",
+  "proxy": "http://user:pass@proxy.example.com:8080"
+}
+```
+
+## Optional: Discord Notifications
+Set up Discord webhook alerts:
+```bash
+# Windows
+set DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
+
+# Linux/Mac
+export DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
+```
+
+Or configure in src/config.jsonc:
+```jsonc
+{
+  "webhook": {
+    "enabled": true,
+    "url": "https://discord.com/api/webhooks/..."
+  }
+}
+```
+
+## Verify Setup
+Run the bot once to verify everything works:
+```bash
+npm start
+```
+
 ---
-**[← Back to Documentation](index.md)**
+**[Back to Documentation](index.md)**

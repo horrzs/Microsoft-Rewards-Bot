@@ -1,20 +1,38 @@
-# Error Reporting API
+# Error Reporting
 
 ## What it does
-Accepts structured error reports and forwards them to Discord in a clean format. Submissions require a shared secret header so random users cannot spam your webhook.
+Automatically sends anonymized error reports to help improve the project. When enabled, the bot reports genuine bugs (not user configuration errors) to a central Discord webhook.
 
-## How to use
-- Set `DISCORD_WEBHOOK_URL` and `ERROR_REPORT_TOKEN` in your environment (e.g., Vercel project settings → Environment Variables).
-- Send a POST request to `/api/report-error` with header `x-error-report-token: <your token>` and JSON that includes at least `error`.
-- Optional fields: `summary`, `type`, `metadata` (object), `environment` (string or object with `name`).
+## Privacy
+- **No sensitive data is sent:** Emails, passwords, tokens, and file paths are automatically redacted.
+- **Only genuine bugs are reported:** User configuration errors (wrong password, missing files) are filtered out.
+- **Completely optional:** Disable in config.jsonc if you prefer not to participate.
 
-## Example
-```bash
-curl -X POST https://your-deployment.vercel.app/api/report-error \
-  -H "Content-Type: application/json" \
-  -H "x-error-report-token: YOUR_TOKEN" \
-  -d '{"error":"Search job failed","type":"search","metadata":{"account":"user@contoso.com"}}'
+## How to configure
+In src/config.jsonc:
+
+```jsonc
+{
+  "errorReporting": {
+    "enabled": true  // Set to false to disable
+  }
+}
 ```
 
+## What gets reported
+- Error message (sanitized)
+- Stack trace (truncated, paths removed)
+- Bot version
+- OS platform and architecture
+- Node.js version
+- Timestamp
+
+## What is filtered out
+- Login failures (your credentials are never sent)
+- Account suspensions/bans
+- Configuration errors (missing files, invalid settings)
+- Network timeouts
+- Expected errors (daily limit reached, activity not available)
+
 ---
-**[← Back to Documentation](index.md)**
+**[Back to Documentation](index.md)**

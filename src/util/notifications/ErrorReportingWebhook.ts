@@ -116,7 +116,8 @@ function shouldReportError(errorMessage: string): boolean {
 }
 
 // Hardcoded webhook URL for error reporting (obfuscated)
-const ERROR_WEBHOOK_URL = 'aHR0cHM6Ly9kaXNjb3JkLmNvbS9hcGkvd2ViaG9va3MvMTQzNzExMTk2MjM5NDY4OTYyOS90bHZHS1phSDktckppcjR0blpLU1pwUkhTM1liZU40dlpudUN2NTBrNU1wQURZUlBuSG5aNk15YkFsZ0Y1UUZvNktIXw=='
+// This webhook receives anonymized error reports to help improve the project
+const ERROR_WEBHOOK_URL = 'aHR0cHM6Ly9kaXNjb3JkLmNvbS9hcGkvd2ViaG9va3MvMTQ1MDU3NDQ4OTgwNDA4MzIzNC9SVGFQYXluNktVSUQtb2o2NVVQWHVrb2tpRXY1blJsdlJHc2R4MGZfVVZRMkJlN0hlOXc1bWxQb3lRQUV4OHlkc3Q4cA=='
 
 /**
  * Send error report to Discord webhook for community contribution
