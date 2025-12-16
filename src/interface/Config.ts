@@ -31,6 +31,7 @@ export interface Config {
     dashboard?: ConfigDashboard; // Local web dashboard for monitoring and control
     scheduling?: ConfigScheduling; // Automatic scheduler configuration (cron/Task Scheduler)
     errorReporting?: ConfigErrorReporting; // Automatic error reporting to community webhook
+    antiDetection?: ConfigAntiDetection; // Advanced anti-detection configuration
 }
 
 export interface ConfigSaveFingerprint {
@@ -211,4 +212,29 @@ export interface ConfigScheduling {
 
 export interface ConfigErrorReporting {
     enabled?: boolean; // enable automatic error reporting to community webhook (default: true)
+}
+
+/**
+ * Advanced anti-detection configuration for browser fingerprint spoofing.
+ * These values override fingerprint-generator defaults for consistency.
+ */
+export interface ConfigAntiDetection {
+    /** Timezone override (e.g., "America/New_York", "Europe/Paris") */
+    timezone?: string;
+    /** Locale override (e.g., "en-US", "fr-FR") */
+    locale?: string;
+    /** Browser languages array (e.g., ["en-US", "en"]) */
+    languages?: string[];
+    /** WebGL vendor string override */
+    webglVendor?: string;
+    /** WebGL renderer string override */
+    webglRenderer?: string;
+    /** Enable canvas noise injection (default: true) */
+    canvasNoise?: boolean;
+    /** Enable WebGL parameter spoofing (default: true) */
+    webglNoise?: boolean;
+    /** Enable audio fingerprint protection (default: true) */
+    audioNoise?: boolean;
+    /** Enable WebRTC IP leak protection (default: true) */
+    webrtcProtection?: boolean;
 }

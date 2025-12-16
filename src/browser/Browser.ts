@@ -5,6 +5,7 @@ import playwright, { BrowserContext } from 'rebrowser-playwright'
 import { MicrosoftRewardsBot } from '../index'
 import { AccountProxy } from '../interface/Account'
 import { updateFingerprintUserAgent } from '../util/browser/UserAgent'
+import { getAntiDetectionScript, getTimezoneScript } from '../util/security/AntiDetectionScripts'
 import { loadSessionData, saveFingerprintData } from '../util/state/Load'
 import { logFingerprintValidation, validateFingerprintConsistency } from '../util/validation/FingerprintValidator'
 
@@ -143,307 +144,52 @@ class Browser {
         const globalTimeout = this.bot.config.browser?.globalTimeout ?? 30000
         context.setDefaultTimeout(typeof globalTimeout === 'number' ? globalTimeout : this.bot.utils.stringToMs(globalTimeout))
 
+        // CRITICAL: Get anti-detection configuration
+        const antiDetectConfig = this.bot.config.antiDetection || {}
+        const timezone = antiDetectConfig.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone
+        const locale = antiDetectConfig.locale || 'en-US'
+        const languages = antiDetectConfig.languages || ['en-US', 'en']
+
+        // Generate comprehensive anti-detection script
+        const antiDetectScript = getAntiDetectionScript({
+            timezone,
+            locale,
+            languages,
+            platform: this.bot.isMobile ? 'Android' : 'Win32',
+            vendor: 'Google Inc.',
+            webglVendor: antiDetectConfig.webglVendor || 'Intel Inc.',
+            webglRenderer: antiDetectConfig.webglRenderer || 'Intel Iris OpenGL Engine'
+        })
+
+        // Generate timezone consistency script
+        const timezoneScript = getTimezoneScript(timezone, locale)
+
         try {
             context.on('page', async (page) => {
                 try {
-                    // IMPROVED: Randomized viewport sizes to avoid fingerprinting
-                    // Fixed sizes are detectable bot patterns
+                    // CRITICAL: Inject anti-detection scripts BEFORE any page load
+                    await page.addInitScript(antiDetectScript)
+                    await page.addInitScript(timezoneScript)
+
+                    // IMPROVED: Use crypto-secure random for viewport sizes
+                    const { secureRandomInt } = await import('../util/security/SecureRandom')
+
                     const viewport = this.bot.isMobile
                         ? {
                             // Mobile: Vary between common phone screen sizes
-                            width: 360 + Math.floor(Math.random() * 60), // 360-420px
-                            height: 640 + Math.floor(Math.random() * 256) // 640-896px
+                            width: secureRandomInt(360, 420),
+                            height: secureRandomInt(640, 896)
                         }
                         : {
                             // Desktop: Vary between common desktop resolutions
-                            width: 1280 + Math.floor(Math.random() * 640), // 1280-1920px
-                            height: 720 + Math.floor(Math.random() * 360) // 720-1080px
+                            width: secureRandomInt(1280, 1920),
+                            height: secureRandomInt(720, 1080)
                         }
 
                     await page.setViewportSize(viewport)
 
-                    // CRITICAL: Advanced anti-detection scripts (MUST run before page load)
+                    // Add custom CSS for page fitting
                     await page.addInitScript(() => {
-                        // ═══════════════════════════════════════════════════════════════
-                        // ANTI-DETECTION LAYER 1: Remove automation indicators
-                        // ═══════════════════════════════════════════════════════════════
-
-                        // CRITICAL: Remove navigator.webdriver (biggest bot indicator)
-                        try {
-                            Object.defineProperty(navigator, 'webdriver', {
-                                get: () => undefined,
-                                configurable: true
-                            })
-                        } catch { /* Already defined */ }
-
-                        // CRITICAL: Mask Chrome DevTools Protocol detection
-                        // Microsoft checks for window.chrome.runtime
-                        try {
-                            // @ts-ignore - window.chrome is intentionally injected
-                            if (!window.chrome) {
-                                // @ts-ignore
-                                window.chrome = {}
-                            }
-                            // @ts-ignore
-                            if (!window.chrome.runtime) {
-                                // @ts-ignore
-                                window.chrome.runtime = {
-                                    // @ts-ignore
-                                    connect: () => { },
-                                    // @ts-ignore
-                                    sendMessage: () => { }
-                                }
-                            }
-                        } catch { /* Chrome object may be frozen */ }
-
-                        // ═══════════════════════════════════════════════════════════════
-                        // ANTI-DETECTION LAYER 2: WebGL & Canvas fingerprint randomization
-                        // ═══════════════════════════════════════════════════════════════
-
-                        // CRITICAL: Add noise to Canvas fingerprinting
-                        // Microsoft uses Canvas to detect identical browser instances
-                        try {
-                            const originalToDataURL = HTMLCanvasElement.prototype.toDataURL
-                            const originalGetImageData = CanvasRenderingContext2D.prototype.getImageData
-
-                            // Random noise generator (consistent per page load, different per session)
-                            const noise = Math.random() * 0.0001
-
-                            HTMLCanvasElement.prototype.toDataURL = function (...args) {
-                                const context = this.getContext('2d')
-                                if (context) {
-                                    // Add imperceptible noise
-                                    const imageData = context.getImageData(0, 0, this.width, this.height)
-                                    for (let i = 0; i < imageData.data.length; i += 4) {
-                                        imageData.data[i] = imageData.data[i]! + noise // R
-                                        imageData.data[i + 1] = imageData.data[i + 1]! + noise // G
-                                        imageData.data[i + 2] = imageData.data[i + 2]! + noise // B
-                                    }
-                                    context.putImageData(imageData, 0, 0)
-                                }
-                                return originalToDataURL.apply(this, args)
-                            }
-
-                            CanvasRenderingContext2D.prototype.getImageData = function (...args) {
-                                const imageData = originalGetImageData.apply(this, args)
-                                // Add noise to raw pixel data
-                                for (let i = 0; i < imageData.data.length; i += 10) {
-                                    imageData.data[i] = imageData.data[i]! + noise
-                                }
-                                return imageData
-                            }
-                        } catch { /* Canvas override may fail in strict mode */ }
-
-                        // CRITICAL: WebGL fingerprint randomization
-                        try {
-                            const getParameter = WebGLRenderingContext.prototype.getParameter
-                            WebGLRenderingContext.prototype.getParameter = function (parameter) {
-                                // Randomize UNMASKED_VENDOR_WEBGL and UNMASKED_RENDERER_WEBGL
-                                if (parameter === 37445) { // UNMASKED_VENDOR_WEBGL
-                                    return 'Intel Inc.'
-                                }
-                                if (parameter === 37446) { // UNMASKED_RENDERER_WEBGL
-                                    return 'Intel Iris OpenGL Engine'
-                                }
-                                return getParameter.apply(this, [parameter])
-                            }
-                        } catch { /* WebGL override may fail */ }
-
-                        // ═══════════════════════════════════════════════════════════════
-                        // ANTI-DETECTION LAYER 3: Permissions API masking
-                        // ═══════════════════════════════════════════════════════════════
-
-                        // CRITICAL: Mask permissions query (bots have different permissions)
-                        try {
-                            const originalQuery = navigator.permissions.query
-                            // @ts-ignore
-                            navigator.permissions.query = (parameters) => {
-                                // Always return 'prompt' for notifications (human-like)
-                                if (parameters.name === 'notifications') {
-                                    return Promise.resolve({ state: 'prompt', onchange: null })
-                                }
-                                return originalQuery(parameters)
-                            }
-                        } catch { /* Permissions API may not be available */ }
-
-                        // ═══════════════════════════════════════════════════════════════
-                        // ANTI-DETECTION LAYER 4: Plugin/MIME type consistency
-                        // ═══════════════════════════════════════════════════════════════
-
-                        // CRITICAL: Add realistic plugins (headless browsers have none)
-                        try {
-                            Object.defineProperty(navigator, 'plugins', {
-                                get: () => [
-                                    {
-                                        name: 'PDF Viewer',
-                                        description: 'Portable Document Format',
-                                        filename: 'internal-pdf-viewer',
-                                        length: 2
-                                    },
-                                    {
-                                        name: 'Chrome PDF Viewer',
-                                        description: 'Portable Document Format',
-                                        filename: 'internal-pdf-viewer',
-                                        length: 2
-                                    },
-                                    {
-                                        name: 'Chromium PDF Viewer',
-                                        description: 'Portable Document Format',
-                                        filename: 'internal-pdf-viewer',
-                                        length: 2
-                                    }
-                                ]
-                            })
-                        } catch { /* Plugins may be frozen */ }
-
-                        // ═══════════════════════════════════════════════════════════════
-                        // ANTI-DETECTION LAYER 5: WebRTC Leak Prevention
-                        // ═══════════════════════════════════════════════════════════════
-
-                        // CRITICAL: Prevent WebRTC from leaking real IP address
-                        try {
-                            // Override RTCPeerConnection to prevent IP leaks
-                            const originalRTCPeerConnection = window.RTCPeerConnection
-                            // @ts-ignore
-                            window.RTCPeerConnection = function (config?: RTCConfiguration) {
-                                // Force STUN servers through proxy or disable
-                                const modifiedConfig: RTCConfiguration = {
-                                    ...config,
-                                    iceServers: [] // Disable ICE to prevent IP leak
-                                }
-                                return new originalRTCPeerConnection(modifiedConfig)
-                            }
-                            // @ts-ignore
-                            window.RTCPeerConnection.prototype = originalRTCPeerConnection.prototype
-                        } catch { /* WebRTC override may fail */ }
-
-                        // ═══════════════════════════════════════════════════════════════
-                        // ANTI-DETECTION LAYER 6: Battery API Spoofing
-                        // ═══════════════════════════════════════════════════════════════
-
-                        // Headless browsers may have unusual battery states
-                        try {
-                            // @ts-ignore
-                            if (navigator.getBattery) {
-                                // @ts-ignore
-                                navigator.getBattery = () => Promise.resolve({
-                                    charging: true,
-                                    chargingTime: 0,
-                                    dischargingTime: Infinity,
-                                    level: 1,
-                                    addEventListener: () => { },
-                                    removeEventListener: () => { },
-                                    dispatchEvent: () => true
-                                })
-                            }
-                        } catch { /* Battery API override may fail */ }
-
-                        // ═══════════════════════════════════════════════════════════════
-                        // ANTI-DETECTION LAYER 7: Hardware Concurrency Consistency
-                        // ═══════════════════════════════════════════════════════════════
-
-                        // Ensure hardware concurrency looks realistic
-                        try {
-                            const realCores = navigator.hardwareConcurrency || 4
-                            // Round to common values: 2, 4, 6, 8, 12, 16
-                            const commonCores = [2, 4, 6, 8, 12, 16]
-                            const normalizedCores = commonCores.reduce((prev, curr) =>
-                                Math.abs(curr - realCores) < Math.abs(prev - realCores) ? curr : prev
-                            )
-                            Object.defineProperty(navigator, 'hardwareConcurrency', {
-                                get: () => normalizedCores,
-                                configurable: true
-                            })
-                        } catch { /* Hardware concurrency override may fail */ }
-
-                        // ═══════════════════════════════════════════════════════════════
-                        // ANTI-DETECTION LAYER 8: Device Memory Consistency
-                        // ═══════════════════════════════════════════════════════════════
-
-                        try {
-                            // @ts-ignore
-                            const realMemory = navigator.deviceMemory || 8
-                            // Round to common values: 2, 4, 8, 16
-                            const commonMemory = [2, 4, 8, 16]
-                            const normalizedMemory = commonMemory.reduce((prev, curr) =>
-                                Math.abs(curr - realMemory) < Math.abs(prev - realMemory) ? curr : prev
-                            )
-                            Object.defineProperty(navigator, 'deviceMemory', {
-                                get: () => normalizedMemory,
-                                configurable: true
-                            })
-                        } catch { /* Device memory override may fail */ }
-
-                        // ═══════════════════════════════════════════════════════════════
-                        // ANTI-DETECTION LAYER 9: Audio Fingerprint Protection
-                        // ═══════════════════════════════════════════════════════════════
-
-                        try {
-                            const originalCreateOscillator = AudioContext.prototype.createOscillator
-                            const originalCreateDynamicsCompressor = AudioContext.prototype.createDynamicsCompressor
-
-                            // Add slight randomization to audio context to prevent fingerprinting
-                            AudioContext.prototype.createOscillator = function () {
-                                const oscillator = originalCreateOscillator.apply(this)
-                                const originalGetFloatFrequencyData = AnalyserNode.prototype.getFloatFrequencyData
-                                AnalyserNode.prototype.getFloatFrequencyData = function (array) {
-                                    originalGetFloatFrequencyData.apply(this, [array])
-                                    // Add imperceptible noise
-                                    for (let i = 0; i < array.length; i++) {
-                                        array[i] = array[i]! + (Math.random() * 0.0001)
-                                    }
-                                }
-                                return oscillator
-                            }
-
-                            AudioContext.prototype.createDynamicsCompressor = function () {
-                                const compressor = originalCreateDynamicsCompressor.apply(this)
-                                // Slightly randomize default values
-                                try {
-                                    compressor.threshold.value = -24 + (Math.random() * 0.001)
-                                    compressor.knee.value = 30 + (Math.random() * 0.001)
-                                } catch { /* May be read-only */ }
-                                return compressor
-                            }
-                        } catch { /* Audio API override may fail */ }
-
-                        // ═══════════════════════════════════════════════════════════════
-                        // ANTI-DETECTION LAYER 10: Timezone & Locale Consistency
-                        // ═══════════════════════════════════════════════════════════════
-
-                        try {
-                            // Ensure Date.prototype.getTimezoneOffset is consistent
-                            const originalGetTimezoneOffset = Date.prototype.getTimezoneOffset
-                            const consistentOffset = originalGetTimezoneOffset.call(new Date())
-                            Date.prototype.getTimezoneOffset = function () {
-                                return consistentOffset
-                            }
-                        } catch { /* Timezone override may fail */ }
-
-                        // ═══════════════════════════════════════════════════════════════
-                        // ANTI-DETECTION LAYER 11: Connection Info Spoofing
-                        // ═══════════════════════════════════════════════════════════════
-
-                        try {
-                            // @ts-ignore
-                            if (navigator.connection) {
-                                Object.defineProperty(navigator, 'connection', {
-                                    get: () => ({
-                                        effectiveType: '4g',
-                                        rtt: 50,
-                                        downlink: 10,
-                                        saveData: false,
-                                        addEventListener: () => { },
-                                        removeEventListener: () => { }
-                                    }),
-                                    configurable: true
-                                })
-                            }
-                        } catch { /* Connection API override may fail */ }
-
-                        // ═══════════════════════════════════════════════════════════════
-                        // Standard styling (non-detection related)
-                        // ═══════════════════════════════════════════════════════════════
                         try {
                             const style = document.createElement('style')
                             style.id = '__mrs_fit_style'
@@ -456,6 +202,8 @@ class Browser {
                             document.documentElement.appendChild(style)
                         } catch { /* Non-critical: Style injection may fail if DOM not ready */ }
                     })
+
+                    this.bot.log(this.bot.isMobile, 'BROWSER', `Page configured with 23-layer anti-detection (viewport: ${viewport.width}x${viewport.height})`)
                 } catch (e) {
                     this.bot.log(this.bot.isMobile, 'BROWSER', `Page setup warning: ${e instanceof Error ? e.message : String(e)}`, 'warn')
                 }
