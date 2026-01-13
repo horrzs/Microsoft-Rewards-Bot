@@ -140,6 +140,10 @@ export class QueryDiversityEngine {
         break
     }
 
+    if (queries.length === 0) {
+      this.log('QUERY-DIVERSITY', `No queries returned for source: ${source}`, 'warn')
+    }
+
     if (queries.length > 0) {
       this.cache.set(source, {
         queries,
