@@ -172,7 +172,7 @@ export interface ConfigRiskManagement {
 
 export interface ConfigQueryDiversity {
     enabled?: boolean; // use multi-source query generation
-    sources?: Array<'google-trends' | 'reddit' | 'news' | 'wikipedia' | 'local-fallback'>; // which sources to use
+    sources?: Array<'google-trends' | 'reddit' | 'news' | 'cn-news' | 'wikipedia' | 'local-fallback'>; // which sources to use
     maxQueriesPerSource?: number; // limit per source
     cacheMinutes?: number; // cache duration
 }
