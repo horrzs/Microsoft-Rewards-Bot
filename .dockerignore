@@ -57,6 +57,6 @@ docker/compose.yaml
 scripts/installer/
 scripts/README.md
 
-# Asset files (not needed for runtime)
-assets/
-public/
+# Asset files (needed for dashboard runtime)
+!assets/
+!public/

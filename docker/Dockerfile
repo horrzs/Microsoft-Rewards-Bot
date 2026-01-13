@@ -78,6 +78,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=builder /usr/src/microsoft-rewards-bot/dist ./dist
 COPY --from=builder /usr/src/microsoft-rewards-bot/package*.json ./
 COPY --from=builder /usr/src/microsoft-rewards-bot/node_modules ./node_modules
+COPY --from=builder /usr/src/microsoft-rewards-bot/public ./public
+COPY --from=builder /usr/src/microsoft-rewards-bot/assets ./assets
 
 # Copy runtime scripts with proper permissions and normalize line endings for non-Unix users
 # IMPROVED: Scripts now organized in docker/ folder

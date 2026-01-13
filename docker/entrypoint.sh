@@ -32,6 +32,19 @@ if [ "${RUN_ON_START:-false}" = "true" ]; then
   echo "[entrypoint] Background process started (PID: $!)"
 fi
 
+# 3b. Optional standalone dashboard server
+if [ "${START_DASHBOARD:-false}" = "true" ]; then
+  echo "[entrypoint] Starting dashboard server in background at $(date)"
+  (
+    cd /usr/src/microsoft-rewards-bot || {
+      echo "[entrypoint-dashboard] ERROR: Unable to cd to /usr/src/microsoft-rewards-bot" >&2
+      exit 1
+    }
+    node --enable-source-maps ./dist/index.js -dashboard
+  ) &
+  echo "[entrypoint] Dashboard process started (PID: $!)"
+fi
+
 # 4. Template and register cron file with explicit timezone export
 if [ ! -f /etc/cron.d/microsoft-rewards-cron.template ]; then
   echo "ERROR: Cron template /etc/cron.d/microsoft-rewards-cron.template not found." >&2
