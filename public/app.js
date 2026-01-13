@@ -64,7 +64,7 @@ function initWebSocket() {
 
 function attemptReconnect() {
     if (state.reconnectAttempts >= 10) {
-        showToast('Connection lost. Please refresh.', 'error')
+        showToast('连接已断开，请刷新页面。', 'error')
         return
     }
     state.reconnectAttempts++
@@ -105,7 +105,7 @@ function updateConnectionStatus(connected) {
     const el = document.getElementById('connectionStatus')
     if (el) {
         el.className = 'connection-status ' + (connected ? 'connected' : 'disconnected')
-        el.innerHTML = '<i class="fas fa-circle"></i> ' + (connected ? 'Connected' : 'Disconnected')
+        el.innerHTML = '<i class="fas fa-circle"></i> ' + (connected ? '已连接' : '已断开')
     }
 }
 
@@ -117,10 +117,10 @@ function initCharts() {
         var pointsCanvas = document.getElementById('pointsChart')
         var activityCanvas = document.getElementById('activityChart')
         if (pointsCanvas) {
-            pointsCanvas.parentElement.innerHTML = '<div style="padding: 2rem; text-align: center; color: #8b949e;">Charts unavailable (Chart.js blocked by browser)</div>'
+            pointsCanvas.parentElement.innerHTML = '<div style="padding: 2rem; text-align: center; color: #8b949e;">图表不可用（Chart.js 被浏览器阻止）</div>'
         }
         if (activityCanvas) {
-            activityCanvas.parentElement.innerHTML = '<div style="padding: 2rem; text-align: center; color: #8b949e;">Charts unavailable (Chart.js blocked by browser)</div>'
+            activityCanvas.parentElement.innerHTML = '<div style="padding: 2rem; text-align: center; color: #8b949e;">图表不可用（Chart.js 被浏览器阻止）</div>'
         }
         return
     }
@@ -141,7 +141,7 @@ function initPointsChart() {
         data: {
             labels: generateDateLabels(7),
             datasets: [{
-                label: 'Points',
+                label: '积分',
                 data: new Array(7).fill(0), // Real data loaded from API
                 borderColor: '#58a6ff',
                 backgroundColor: gradient,
@@ -171,7 +171,7 @@ function initActivityChart() {
     activityChart = new Chart(ctx, {
         type: 'doughnut',
         data: {
-            labels: ['Searches', 'Daily Set', 'Punch Cards', 'Quizzes', 'Other'],
+            labels: ['搜索', '每日任务', '打卡卡片', '测验', '其他'],
             datasets: [{
                 data: [45, 25, 15, 10, 5],
                 backgroundColor: ['#58a6ff', '#3fb950', '#d29922', '#a371f7', '#39c5cf'],
@@ -198,7 +198,7 @@ function generateDateLabels(days) {
     for (let i = days - 1; i >= 0; i--) {
         const d = new Date()
         d.setDate(d.getDate() - i)
-        labels.push(d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }))
+        labels.push(d.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' }))
     }
     return labels
 }
@@ -287,11 +287,11 @@ function loadAccountHistoryData() {
 function updateChartsWithRealData(histories) {
     var last7Days = {}
     var activityCounts = {
-        'Desktop Search': 0,
-        'Mobile Search': 0,
-        'Daily Set': 0,
-        'Quizzes': 0,
-        'Other': 0
+        '桌面搜索': 0,
+        '移动搜索': 0,
+        '每日任务': 0,
+        '测验': 0,
+        '其他': 0
     }
 
     // Process each account's history
@@ -311,14 +311,14 @@ function updateChartsWithRealData(histories) {
             if (entry.completedActivities) {
                 entry.completedActivities.forEach((activity) => {
                     if (activity.includes('Search')) {
-                        if (entry.desktopPoints > 0) activityCounts['Desktop Search']++
-                        if (entry.mobilePoints > 0) activityCounts['Mobile Search']++
+                        if (entry.desktopPoints > 0) activityCounts['桌面搜索']++
+                        if (entry.mobilePoints > 0) activityCounts['移动搜索']++
                     } else if (activity.includes('DailySet')) {
-                        activityCounts['Daily Set']++
+                        activityCounts['每日任务']++
                     } else if (activity.includes('Quiz') || activity.includes('Poll')) {
-                        activityCounts['Quizzes']++
+                        activityCounts['测验']++
                     } else {
-                        activityCounts['Other']++
+                        activityCounts['其他']++
                     }
                 })
             }
@@ -330,7 +330,7 @@ function updateChartsWithRealData(histories) {
         var sortedDates = Object.keys(last7Days).sort().slice(-7)
         var labels = sortedDates.map((d) => {
             var date = new Date(d)
-            return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+            return date.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })
         })
         var data = sortedDates.map((d) => { return last7Days[d] })
 
@@ -356,7 +356,7 @@ function refreshData() {
     loadInitialData()
     setTimeout(() => {
         if (btn) btn.classList.remove('fa-spin')
-        showToast('Data refreshed', 'success')
+        showToast('数据已刷新', 'success')
     }, 500)
 }
 
@@ -370,15 +370,15 @@ function startBot() {
                 state.isRunning = true
                 state.stats.startTime = Date.now()
                 updateBotStatus({ running: true })
-                showToast('Bot started', 'success')
+                showToast('机器人已启动', 'success')
             } else {
                 updateButtonStates(false)
-                showToast(result.error || 'Failed to start', 'error')
+                showToast(result.error || '启动失败', 'error')
             }
         })
         .catch((e) => {
             updateButtonStates(false)
-            showToast('Failed: ' + e.message, 'error')
+            showToast('失败：' + e.message, 'error')
         })
 }
 
@@ -389,41 +389,41 @@ function stopBot() {
             if (result.success) {
                 state.isRunning = false
                 updateBotStatus({ running: false })
-                showToast('Bot stopped', 'info')
+                showToast('机器人已停止', 'info')
             } else {
-                showToast(result.error || 'Failed to stop', 'error')
+                showToast(result.error || '停止失败', 'error')
             }
         })
         .catch((e) => {
-            showToast('Failed: ' + e.message, 'error')
+            showToast('失败：' + e.message, 'error')
         })
 }
 
 function restartBot() {
-    showToast('Restarting...', 'info')
+    showToast('正在重启...', 'info')
     fetch('/api/restart', { method: 'POST' })
         .then((r) => { return r.json() })
         .then((result) => {
             if (result.success) {
                 state.stats.startTime = Date.now()
-                showToast('Bot restarted', 'success')
+                showToast('机器人已重启', 'success')
             } else {
-                showToast(result.error || 'Failed to restart', 'error')
+                showToast(result.error || '重启失败', 'error')
             }
         })
         .catch((e) => {
-            showToast('Failed: ' + e.message, 'error')
+            showToast('失败：' + e.message, 'error')
         })
 }
 
 function resetJobState() {
-    showModal('Reset Job State',
-        '<p>This will clear all completed task records for today.</p>' +
+    showModal('重置任务状态',
+        '<p>这将清除今天所有已完成的任务记录。</p>' +
         '<p style="color: var(--accent-orange); margin-top: 1rem;">' +
-        '<i class="fas fa-exclamation-triangle"></i> This cannot be undone.</p>',
+        '<i class="fas fa-exclamation-triangle"></i> 此操作无法撤销。</p>',
         [
-            { text: 'Cancel', cls: 'btn btn-secondary', action: 'closeModal()' },
-            { text: 'Reset', cls: 'btn btn-danger', action: 'confirmResetJobState()' }
+            { text: '取消', cls: 'btn btn-secondary', action: 'closeModal()' },
+            { text: '重置', cls: 'btn btn-danger', action: 'confirmResetJobState()' }
         ]
     )
 }
@@ -434,16 +434,16 @@ function confirmResetJobState() {
         .then((r) => { return r.json() })
         .then((result) => {
             if (result.success) {
-                showToast('Job state reset', 'success')
+                showToast('任务状态已重置', 'success')
                 state.stats.completed = 0
                 state.stats.errors = 0
                 updateStatsDisplay()
             } else {
-                showToast(result.error || 'Failed to reset', 'error')
+                showToast(result.error || '重置失败', 'error')
             }
         })
         .catch((e) => {
-            showToast('Failed: ' + e.message, 'error')
+            showToast('失败：' + e.message, 'error')
         })
 }
 
@@ -462,7 +462,7 @@ function updateBotStatus(status) {
     var badge = document.getElementById('statusBadge')
     if (badge) {
         badge.className = 'status-badge ' + (status.running ? 'status-running' : 'status-stopped')
-        badge.innerHTML = '<i class="fas fa-circle"></i><span>' + (status.running ? 'RUNNING' : 'STOPPED') + '</span>'
+        badge.innerHTML = '<i class="fas fa-circle"></i><span>' + (status.running ? '运行中' : '已停止') + '</span>'
     }
 
     if (status.startTime) {
@@ -501,16 +501,16 @@ function renderAccounts(accounts) {
     if (!container) return
 
     if (accounts.length === 0) {
-        container.innerHTML = '<div class="log-empty">No accounts configured</div>'
+        container.innerHTML = '<div class="log-empty">未配置账号</div>'
         return
     }
 
     var html = ''
     accounts.forEach((account) => {
-        var initial = (account.email || 'U')[0].toUpperCase()
-        var displayEmail = account.email ? maskEmail(account.email) : 'Unknown'
+        var initial = (account.email || '未')[0].toUpperCase()
+        var displayEmail = account.email ? maskEmail(account.email) : '未知'
         var statusClass = account.status || 'pending'
-        var statusText = statusClass.charAt(0).toUpperCase() + statusClass.slice(1)
+        var statusText = getAccountStatusLabel(statusClass)
 
         html += '<div class="account-item" data-email="' + (account.email || '') + '">' +
             '<div class="account-info">' +
@@ -530,13 +530,24 @@ function updateAccountStatus(data) {
         var statusEl = accountEl.querySelector('.account-status')
         if (statusEl) {
             statusEl.className = 'account-status ' + data.status
-            statusEl.textContent = data.status.charAt(0).toUpperCase() + data.status.slice(1)
+            statusEl.textContent = getAccountStatusLabel(data.status)
         }
     }
 }
 
+function getAccountStatusLabel(status) {
+    var labels = {
+        idle: '空闲',
+        running: '运行中',
+        completed: '已完成',
+        error: '出错',
+        pending: '等待中'
+    }
+    return labels[status] || (status ? status.charAt(0).toUpperCase() + status.slice(1) : '')
+}
+
 function maskEmail(email) {
-    if (!email) return 'Unknown'
+    if (!email) return '未知'
     var parts = email.split('@')
     if (parts.length < 2) return email
     var local = parts[0]
@@ -556,7 +567,7 @@ function addLogEntry(log) {
     var normalizedLog = {
         timestamp: log.timestamp || new Date().toISOString(),
         level: log.level || 'log',
-        source: log.source || log.title || 'BOT',
+        source: log.source || log.title || '机器人',
         message: log.message || ''
     }
 
@@ -600,7 +611,7 @@ function filterLogs() {
         : state.logs.filter((log) => { return log.level === state.currentLogFilter })
 
     if (filtered.length === 0) {
-        container.innerHTML = '<div class="log-empty">No logs to display</div>'
+        container.innerHTML = '<div class="log-empty">暂无日志可显示</div>'
         return
     }
 
@@ -619,9 +630,9 @@ function clearLogs() {
     state.logs = []
     var container = document.getElementById('logsContainer')
     if (container) {
-        container.innerHTML = '<div class="log-empty">No logs to display</div>'
+        container.innerHTML = '<div class="log-empty">暂无日志可显示</div>'
     }
-    showToast('Logs cleared', 'info')
+    showToast('日志已清空', 'info')
 }
 
 function toggleAutoScroll() {
@@ -631,13 +642,13 @@ function toggleAutoScroll() {
         btn.classList.toggle('btn-primary', state.autoScroll)
         btn.classList.toggle('btn-secondary', !state.autoScroll)
     }
-    showToast('Auto-scroll ' + (state.autoScroll ? 'enabled' : 'disabled'), 'info')
+    showToast('自动滚动' + (state.autoScroll ? '已开启' : '已关闭'), 'info')
 }
 
 // Quick Actions
 function runSingleAccount() {
     if (state.accounts.length === 0) {
-        showToast('No accounts available', 'warning')
+        showToast('无可用账号', 'warning')
         return
     }
 
@@ -645,13 +656,13 @@ function runSingleAccount() {
         return '<option value="' + a.email + '">' + maskEmail(a.email) + '</option>'
     }).join('')
 
-    showModal('Run Single Account',
-        '<p style="margin-bottom: 1rem;">Select an account to run:</p>' +
+    showModal('运行单个账号',
+        '<p style="margin-bottom: 1rem;">请选择要运行的账号：</p>' +
         '<select id="singleAccountSelect" class="log-filter" style="width: 100%; padding: 0.5rem;">' +
         options + '</select>',
         [
-            { text: 'Cancel', cls: 'btn btn-secondary', action: 'closeModal()' },
-            { text: 'Run', cls: 'btn btn-primary', action: 'executeSingleAccount()' }
+            { text: '取消', cls: 'btn btn-secondary', action: 'closeModal()' },
+            { text: '运行', cls: 'btn btn-primary', action: 'executeSingleAccount()' }
         ]
     )
 }
@@ -664,11 +675,11 @@ function executeSingleAccount() {
     closeModal()
 
     if (!email) {
-        showToast('No account selected', 'error')
+        showToast('未选择账号', 'error')
         return
     }
 
-    showToast('Starting bot for: ' + maskEmail(email), 'info')
+    showToast('正在启动机器人：' + maskEmail(email), 'info')
 
     // Call API to run single account
     fetch('/api/run-single', {
@@ -679,41 +690,41 @@ function executeSingleAccount() {
         .then((res) => res.json())
         .then((data) => {
             if (data.success) {
-                showToast('✓ Bot started for account: ' + maskEmail(email), 'success')
+                showToast('✓ 已为账号启动机器人：' + maskEmail(email), 'success')
                 refreshData() // FIXED: Use refreshData() instead of undefined loadStatus()
             } else {
-                showToast('✗ Failed to start: ' + (data.error || 'Unknown error'), 'error')
+                showToast('✗ 启动失败：' + (data.error || '未知错误'), 'error')
             }
         })
         .catch((err) => {
             console.error('[API] Run single failed:', err)
-            showToast('✗ Request failed: ' + err.message, 'error')
+            showToast('✗ 请求失败：' + err.message, 'error')
         })
 }
 
 function exportLogs() {
     if (state.logs.length === 0) {
-        showToast('No logs to export', 'warning')
+        showToast('无日志可导出', 'warning')
         return
     }
 
     var logText = state.logs.map((log) => {
-        return '[' + formatTime(log.timestamp) + '] [' + (log.level || 'LOG').toUpperCase() + '] [' + (log.source || 'BOT') + '] ' + log.message
+        return '[' + formatTime(log.timestamp) + '] [' + (log.level || '日志').toUpperCase() + '] [' + (log.source || '机器人') + '] ' + log.message
     }).join('\n')
 
     var blob = new Blob([logText], { type: 'text/plain' })
     var url = URL.createObjectURL(blob)
     var a = document.createElement('a')
     a.href = url
-    a.download = 'rewards-bot-logs-' + new Date().toISOString().slice(0, 10) + '.txt'
+    a.download = 'rewards-bot-日志-' + new Date().toISOString().slice(0, 10) + '.txt'
     a.click()
     URL.revokeObjectURL(url)
-    showToast('Logs exported', 'success')
+    showToast('日志已导出', 'success')
 }
 
 function openConfig() {
-    showModal('Configuration Viewer', `
-        <div class="config-loading">Loading configuration...</div>
+    showModal('配置查看器', `
+        <div class="config-loading">正在加载配置...</div>
     `, [])
 
     // Fetch config (read-only view)
@@ -723,42 +734,42 @@ function openConfig() {
             const body = `
                 <div class="config-editor">
                     <div class="config-warning">
-                        ⚠️ <strong>Read-Only View</strong><br>
-                        This is a simplified preview. To edit config:<br>
-                        1. Open <code>src/config.jsonc</code> in a text editor<br>
-                        2. Make your changes<br>
-                        3. Save and restart the bot
+                        ⚠️ <strong>只读视图</strong><br>
+                        这是简化预览。要编辑配置：<br>
+                        1. 在文本编辑器中打开 <code>src/config.jsonc</code><br>
+                        2. 进行修改<br>
+                        3. 保存并重启机器人
                     </div>
                     <textarea id="configEditor" class="config-textarea" readonly>${JSON.stringify(data.config, null, 2)}</textarea>
-                    <p class="config-hint">💡 Manual editing preserves comments and complex settings</p>
+                    <p class="config-hint">💡 手动编辑可保留注释和复杂设置</p>
                 </div>
             `
             const buttons = [
-                { cls: 'btn btn-sm btn-secondary', action: 'closeModal()', text: 'Close' }
+                { cls: 'btn btn-sm btn-secondary', action: 'closeModal()', text: '关闭' }
             ]
-            showModal('Configuration Viewer', body, buttons)
+            showModal('配置查看器', body, buttons)
         })
         .catch(e => {
-            showToast('Failed to load config: ' + e.message, 'error')
+            showToast('加载配置失败：' + e.message, 'error')
             closeModal()
         })
 }
 
 function saveConfig() {
     // Config editing is disabled - this function is now unused
-    showToast('Config editing disabled. Edit src/config.jsonc manually.', 'warning')
+    showToast('已禁用配置编辑。请手动编辑 src/config.jsonc。', 'warning')
     closeModal()
 }
 
 function viewHistory() {
-    showModal('Run History', '<div class="config-loading">Loading history...</div>', [])
+    showModal('运行历史', '<div class="config-loading">正在加载历史记录...</div>', [])
 
     fetch('/api/history')
         .then(r => r.json())
         .then(history => {
             if (!history || history.length === 0) {
-                showModal('Run History', '<p class="log-empty">No history available yet</p>', [
-                    { cls: 'btn btn-sm btn-secondary', action: 'closeModal()', text: 'Close' }
+                showModal('运行历史', '<p class="log-empty">暂无历史记录</p>', [
+                    { cls: 'btn btn-sm btn-secondary', action: 'closeModal()', text: '关闭' }
                 ])
                 return
             }
@@ -767,21 +778,21 @@ function viewHistory() {
                 <div class="history-row">
                     <div class="history-date">${new Date(h.timestamp || Date.now()).toLocaleString()}</div>
                     <div class="history-stats">
-                        <span>✅ ${h.successCount || 0} success</span>
-                        <span>❌ ${h.errorCount || 0} errors</span>
-                        <span>🎯 ${h.totalPoints || 0} pts</span>
+                        <span>✅ ${h.successCount || 0} 成功</span>
+                        <span>❌ ${h.errorCount || 0} 错误</span>
+                        <span>🎯 ${h.totalPoints || 0} 积分</span>
                     </div>
                 </div>
             `).join('')
 
             const body = `<div class="history-list">${rows}</div>`
             const buttons = [
-                { cls: 'btn btn-sm btn-secondary', action: 'closeModal()', text: 'Close' }
+                { cls: 'btn btn-sm btn-secondary', action: 'closeModal()', text: '关闭' }
             ]
-            showModal('Run History (Last 10 Runs)', body, buttons)
+            showModal('运行历史（最近 10 次）', body, buttons)
         })
         .catch(e => {
-            showToast('Failed to load history: ' + e.message, 'error')
+            showToast('加载历史记录失败：' + e.message, 'error')
             closeModal()
         })
 }
@@ -894,7 +905,7 @@ function startUptimeTimer() {
 // Formatting
 function formatTime(timestamp) {
     var d = new Date(timestamp)
-    return d.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })
+    return d.toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })
 }
 
 function formatDuration(ms) {
