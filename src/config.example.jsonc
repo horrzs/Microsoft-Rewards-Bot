@@ -48,6 +48,7 @@
         "sources": [
             "google-trends", // Google Trends trending searches
             "reddit", // Reddit hot posts
+            "cn-news", // Baidu realtime hot list (China)
             "local-fallback" // Embedded fallback queries
         ],
         "maxQueriesPerSource": 10, // Max queries to fetch per source

@@ -4,7 +4,7 @@ import { Util } from '../core/Utils'
 type HttpClient = Pick<typeof axios, 'request'> | { request: (config: AxiosRequestConfig) => Promise<AxiosResponse> }
 
 export interface QueryDiversityConfig {
-  sources: Array<'google-trends' | 'reddit' | 'news' | 'wikipedia' | 'local-fallback'>
+  sources: Array<'google-trends' | 'reddit' | 'news' | 'wikipedia' | 'local-fallback' | 'cn-news'>
   deduplicate: boolean
   mixStrategies: boolean
   maxQueriesPerSource: number
@@ -126,6 +126,9 @@ export class QueryDiversityEngine {
       case 'news':
         queries = await this.fetchNews()
         break
+      case 'cn-news':
+        queries = await this.fetchCnNews()
+        break
       case 'wikipedia':
         queries = await this.fetchWikipedia()
         break
@@ -233,6 +236,30 @@ export class QueryDiversityEngine {
         .map(m => m[1]?.replace(/<[^>]+>/g, '').trim())
         .filter((t: string | undefined) => t && t.length > 10 && t.length < 100)
         .slice(0, 10) as string[]
+    } catch {
+      return []
+    }
+  }
+
+  /**
+   * Fetch from China hot topics (Baidu realtime hot list)
+   */
+  private async fetchCnNews(): Promise<string[]> {
+    try {
+      const data = await this.fetchHttp('https://top.baidu.com/api/board?platform=wise&tab=realtime', {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          Referer: 'https://top.baidu.com/'
+        },
+        timeout: 8000
+      })
+      const parsed = JSON.parse(data)
+      const cards = parsed?.data?.cards || []
+      const items = cards.flatMap((card: { content?: Array<Record<string, string>> }) => card.content || [])
+      const queries = items
+        .map((item: Record<string, string>) => item.query || item.word || item.keyword || item.title)
+        .filter((t: string | undefined) => t && t.length > 2 && t.length < 100) as string[]
+      return queries.slice(0, this.config.maxQueriesPerSource)
     } catch {
       return []
     }
