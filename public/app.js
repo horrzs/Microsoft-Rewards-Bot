@@ -198,7 +198,7 @@ function generateDateLabels(days) {
     for (let i = days - 1; i >= 0; i--) {
         const d = new Date()
         d.setDate(d.getDate() - i)
-        labels.push(d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }))
+        labels.push(d.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' }))
     }
     return labels
 }
@@ -330,7 +330,7 @@ function updateChartsWithRealData(histories) {
         var sortedDates = Object.keys(last7Days).sort().slice(-7)
         var labels = sortedDates.map((d) => {
             var date = new Date(d)
-            return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+            return date.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })
         })
         var data = sortedDates.map((d) => { return last7Days[d] })
 
@@ -765,7 +765,7 @@ function viewHistory() {
 
             const rows = history.slice(0, 10).map(h => `
                 <div class="history-row">
-                    <div class="history-date">${new Date(h.timestamp || Date.now()).toLocaleString()}</div>
+                    <div class="history-date">${new Date(h.timestamp || Date.now()).toLocaleString('zh-CN')}</div>
                     <div class="history-stats">
                         <span>✅ ${h.successCount || 0} success</span>
                         <span>❌ ${h.errorCount || 0} errors</span>
@@ -894,7 +894,7 @@ function startUptimeTimer() {
 // Formatting
 function formatTime(timestamp) {
     var d = new Date(timestamp)
-    return d.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })
+    return d.toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })
 }
 
 function formatDuration(ms) {
