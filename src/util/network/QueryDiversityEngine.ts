@@ -263,8 +263,13 @@ export class QueryDiversityEngine {
       const queries = items
         .map((item: Record<string, string>) => item.query || item.word || item.keyword || item.title)
         .filter((t: string | undefined) => t && t.length > 2 && t.length < 100) as string[]
+      if (queries.length === 0) {
+        this.log('QUERY-DIVERSITY', `CN news returned no items (cards=${cards.length}, items=${items.length})`, 'warn')
+      }
       return queries.slice(0, this.config.maxQueriesPerSource)
-    } catch {
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error)
+      this.log('QUERY-DIVERSITY', `CN news fetch failed: ${errorMsg}`, 'warn')
       return []
     }
   }
