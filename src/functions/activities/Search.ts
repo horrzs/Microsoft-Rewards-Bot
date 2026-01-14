@@ -46,21 +46,33 @@ export class Search extends Workers {
             return
         }
 
-        // Generate search queries (primary: Google Trends)
-        const geo = this.bot.config.searchSettings.useGeoLocaleQueries ? data.userProfile.attributes.country : 'US'
-        let googleSearchQueries = await this.getGoogleTrends(geo)
+        // Generate search queries (primary: Google Trends unless explicitly excluded)
+        const diversitySources = this.bot.config.queryDiversity?.sources || []
+        const skipGoogleTrends = this.bot.config.queryDiversity?.enabled
+            && Array.isArray(diversitySources)
+            && diversitySources.length > 0
+            && !diversitySources.includes('google-trends')
 
-        // Fallback: if trends failed or insufficient, sample from local queries file
-        if (!googleSearchQueries.length || googleSearchQueries.length < 10) {
-            this.bot.log(this.bot.isMobile, 'SEARCH-BING', 'Primary trends source insufficient, falling back to local queries.json', 'warn')
-            try {
-                const local = await import('../queries.json')
-                // Flatten & sample
-                const sampleSize = Math.max(5, Math.min(this.bot.config.searchSettings.localFallbackCount || 25, local.default.length))
-                const sampled = this.bot.utils.shuffleArray(local.default).slice(0, sampleSize)
-                googleSearchQueries = sampled.map((x: { title: string; queries: string[] }) => ({ topic: x.queries[0] || x.title, related: x.queries.slice(1) }))
-            } catch (e) {
-                this.bot.log(this.bot.isMobile, 'SEARCH-BING', 'Failed loading local queries fallback: ' + (e instanceof Error ? e.message : e), 'error')
+        const geo = this.bot.config.searchSettings.useGeoLocaleQueries ? data.userProfile.attributes.country : 'US'
+        let googleSearchQueries: GoogleSearch[] = []
+
+        if (skipGoogleTrends) {
+            this.bot.log(this.bot.isMobile, 'SEARCH-BING', 'Query diversity sources exclude google-trends; skipping Google Trends seed')
+        } else {
+            googleSearchQueries = await this.getGoogleTrends(geo)
+
+            // Fallback: if trends failed or insufficient, sample from local queries file
+            if (!googleSearchQueries.length || googleSearchQueries.length < 10) {
+                this.bot.log(this.bot.isMobile, 'SEARCH-BING', 'Primary trends source insufficient, falling back to local queries.json', 'warn')
+                try {
+                    const local = await import('../queries.json')
+                    // Flatten & sample
+                    const sampleSize = Math.max(5, Math.min(this.bot.config.searchSettings.localFallbackCount || 25, local.default.length))
+                    const sampled = this.bot.utils.shuffleArray(local.default).slice(0, sampleSize)
+                    googleSearchQueries = sampled.map((x: { title: string; queries: string[] }) => ({ topic: x.queries[0] || x.title, related: x.queries.slice(1) }))
+                } catch (e) {
+                    this.bot.log(this.bot.isMobile, 'SEARCH-BING', 'Failed loading local queries fallback: ' + (e instanceof Error ? e.message : e), 'error')
+                }
             }
         }
 
