@@ -15,18 +15,23 @@ services:
       - ../src/accounts.jsonc:/usr/src/microsoft-rewards-bot/accounts.jsonc:ro
       - ../src/config.jsonc:/usr/src/microsoft-rewards-bot/config.jsonc:ro
       - ../sessions:/usr/src/microsoft-rewards-bot/sessions # Optional, saves your login session
-    # Optional: expose dashboard only to the host (blocks LAN access)
-    # ports:
-    #   - "127.0.0.1:3000:3000"
+
+    ports:
+      - "127.0.0.1:3000:3000" # Optional, exposes the internal web server for monitoring
 
     environment:
-      TZ: "America/Toronto" # Set your timezone for proper scheduling
+      TZ: "Asia/Shanghai" # Set your timezone for proper scheduling
       NODE_ENV: "production"
       CRON_SCHEDULE: "0 7,16,20 * * *" # Customize your schedule, use crontab.guru for formatting
       RUN_ON_START: "true" # Runs the script immediately on container startup
-      # START_DASHBOARD: "true" # Keep the dashboard server running in the container
-      # DASHBOARD_HOST: "0.0.0.0" # Required for external access to the dashboard process
-      # DASHBOARD_PORT: "3000"
+      START_DASHBOARD: "true"
+      DASHBOARD_HOST: "0.0.0.0"
+      DASHBOARD_PORT: "3000"
+
+
+      #      HTTP_PROXY: "http://192.168.1.106:7890"
+#      HTTPS_PROXY: "http://192.168.1.106:7890"
+      NO_PROXY: "localhost,127.0.0.1"
 
       # Add scheduled start-time randomization (uncomment to customize or disable, default: enabled)
       #MIN_SLEEP_MINUTES: "5"
