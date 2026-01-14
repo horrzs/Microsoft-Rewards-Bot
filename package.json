@@ -31,7 +31,7 @@
     "lint:fix": "eslint \"src/**/*.{ts,tsx}\" --fix",
     "docker:build": "docker build -f docker/Dockerfile -t microsoft-rewards-bot .",
     "docker:run": "docker run -d --name ms-rewards microsoft-rewards-bot",
-    "docker:compose": "docker compose -f docker/compose.yaml up -d",
+    "docker:compose": "docker compose -f docker/compose.yaml up -d --build",
     "docker:logs": "docker logs -f ms-rewards",
     "docker:stop": "docker stop ms-rewards && docker rm ms-rewards",
     "kill:chrome": "node -e \"const { execSync } = require('child_process'); const isWin = process.platform === 'win32'; try { execSync(isWin ? 'taskkill /F /IM chrome.exe 2>nul || exit 0' : 'pkill -f chrome || true', {stdio: 'inherit'}); } catch(e) {}\""
