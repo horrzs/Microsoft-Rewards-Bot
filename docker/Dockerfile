@@ -24,6 +24,7 @@ RUN rm -rf node_modules \
 
 # Install Chromium Headless Shell, and cleanup
 RUN npx playwright install --with-deps --only-shell chromium \
+    && touch /usr/src/microsoft-rewards-bot/.playwright-chromium-installed \
     && rm -rf /root/.cache /tmp/* /var/tmp/*
 
 ###############################################################################
@@ -80,6 +81,7 @@ COPY --from=builder /usr/src/microsoft-rewards-bot/package*.json ./
 COPY --from=builder /usr/src/microsoft-rewards-bot/node_modules ./node_modules
 COPY --from=builder /usr/src/microsoft-rewards-bot/public ./public
 COPY --from=builder /usr/src/microsoft-rewards-bot/assets ./assets
+COPY --from=builder /usr/src/microsoft-rewards-bot/.playwright-chromium-installed ./
 
 # Copy runtime scripts with proper permissions and normalize line endings for non-Unix users
 # IMPROVED: Scripts now organized in docker/ folder
