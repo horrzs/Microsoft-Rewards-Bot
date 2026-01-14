@@ -250,28 +250,124 @@ export class QueryDiversityEngine {
    */
   private async fetchCnNews(): Promise<string[]> {
     try {
-      const data = await this.fetchHttp('https://top.baidu.com/api/board?platform=wise&tab=realtime', {
+      const endpoints = [
+        'https://top.baidu.com/api/board?platform=wise&tab=realtime',
+        'https://top.baidu.com/api/board?platform=pc&tab=realtime'
+      ]
+
+      for (const endpoint of endpoints) {
+        const data = await this.fetchHttp(endpoint, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            Referer: 'https://top.baidu.com/'
+          },
+          timeout: 8000
+        })
+        const queries = this.extractCnNewsFromJson(data)
+        if (queries.length > 0) {
+          return queries.slice(0, this.config.maxQueriesPerSource)
+        }
+      }
+
+      const html = await this.fetchHttp('https://top.baidu.com/board?tab=realtime', {
         headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-          Referer: 'https://top.baidu.com/'
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         },
         timeout: 8000
       })
-      const parsed = JSON.parse(data)
-      const cards = parsed?.data?.cards || []
-      const items = cards.flatMap((card: { content?: Array<Record<string, string>> }) => card.content || [])
-      const queries = items
-        .map((item: Record<string, string>) => item.query || item.word || item.keyword || item.title)
-        .filter((t: string | undefined) => t && t.length > 2 && t.length < 100) as string[]
-      if (queries.length === 0) {
-        this.log('QUERY-DIVERSITY', `CN news returned no items (cards=${cards.length}, items=${items.length})`, 'warn')
+      const htmlQueries = this.extractCnNewsFromHtml(html)
+      if (htmlQueries.length === 0) {
+        this.log('QUERY-DIVERSITY', 'CN news returned no items from JSON or HTML sources', 'warn')
       }
-      return queries.slice(0, this.config.maxQueriesPerSource)
+      return htmlQueries.slice(0, this.config.maxQueriesPerSource)
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error)
       this.log('QUERY-DIVERSITY', `CN news fetch failed: ${errorMsg}`, 'warn')
       return []
     }
+  }
+
+  private extractCnNewsFromJson(data: string): string[] {
+    try {
+      const parsed = JSON.parse(data)
+      const cards = parsed?.data?.cards || parsed?.data?.cardList || []
+      const items = cards.flatMap((card: {
+        content?: Array<Record<string, unknown>>
+        items?: Array<Record<string, unknown>>
+        list?: Array<Record<string, unknown>>
+        data?: Array<Record<string, unknown>>
+      }) => {
+        const containers = [card.content, card.items, card.list, card.data]
+          .filter(Array.isArray)
+          .flat() as Array<Record<string, unknown>>
+        return containers.flatMap((entry: Record<string, unknown>) => this.unwrapCnNewsContainer(entry))
+      })
+      const listFallback = parsed?.data?.list || parsed?.data?.items || parsed?.data?.currentBoard?.list || []
+      const combinedItems = items.length > 0 ? items : listFallback
+      const queries = combinedItems
+        .map((item: Record<string, unknown>) => this.pickCnNewsTitle(item))
+        .filter((t: string | undefined) => t && t.length > 2 && t.length < 100) as string[]
+      if (queries.length === 0) {
+        const cardCount = Array.isArray(cards) ? cards.length : 0
+        const itemCount = Array.isArray(combinedItems) ? combinedItems.length : 0
+        this.log('QUERY-DIVERSITY', `CN news returned no items (cards=${cardCount}, items=${itemCount})`, 'warn')
+      }
+      return queries
+    } catch {
+      return []
+    }
+  }
+
+  private unwrapCnNewsContainer(entry: Record<string, unknown>): Array<Record<string, unknown>> {
+    const nestedArrays = [entry.content, entry.items, entry.list, entry.data]
+      .filter(Array.isArray)
+      .flat() as Array<Record<string, unknown>>
+    if (nestedArrays.length > 0) {
+      return nestedArrays.flatMap((nested: Record<string, unknown>) => this.unwrapCnNewsContainer(nested))
+    }
+    return [entry]
+  }
+
+  private extractCnNewsFromHtml(html: string): string[] {
+    const results: string[] = []
+    const patterns = [
+      /<div[^>]*class="[^"]*c-single-text-ellipsis[^"]*"[^>]*>(.*?)<\/div>/gi,
+      /<a[^>]*class="[^"]*title[^"]*"[^>]*>(.*?)<\/a>/gi
+    ]
+
+    for (const pattern of patterns) {
+      let match
+      while ((match = pattern.exec(html)) !== null) {
+        const text = match[1]?.replace(/<[^>]+>/g, '').trim()
+        if (text && text.length > 2 && text.length < 100) {
+          results.push(text)
+        }
+      }
+    }
+
+    return Array.from(new Set(results))
+  }
+
+  private pickCnNewsTitle(item: Record<string, unknown>): string | undefined {
+    const candidates = ['query', 'word', 'keyword', 'title', 'name', 'raw_title', 'display_name', 'show', 'topic', 'hotWord', 'hotWordShort', 'desc']
+    for (const key of candidates) {
+      const value = item[key]
+      if (typeof value === 'string' && value.length > 2 && value.length < 100) {
+        return value
+      }
+      if (value && typeof value === 'object') {
+        const nested = value as Record<string, unknown>
+        for (const nestedKey of candidates) {
+          const nestedValue = nested[nestedKey]
+          if (typeof nestedValue === 'string' && nestedValue.length > 2 && nestedValue.length < 100) {
+            return nestedValue
+          }
+        }
+      }
+    }
+
+    const fallback = Object.values(item).find(value => typeof value === 'string' && value.length > 2 && value.length < 100 && !value.startsWith('http'))
+    return typeof fallback === 'string' ? fallback : undefined
   }
 
   /**
