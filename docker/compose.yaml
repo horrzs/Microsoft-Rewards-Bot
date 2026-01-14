@@ -3,6 +3,10 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile
+      # If Docker Desktop reports "failed to stat active key during commit" in the build step,
+      # retry with BuildKit disabled or prune the builder cache:
+      # DOCKER_BUILDKIT=0 docker compose -f docker/compose.yaml up -d
+      # docker builder prune -f
     container_name: microsoft-rewards-bot
     restart: unless-stopped
 

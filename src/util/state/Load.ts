@@ -176,7 +176,7 @@ function normalizeConfig(raw: unknown): Config {
     const queryDiversity = hasQueryCfg ? {
         enabled: queryDiversityRaw.enabled === true,
         sources: Array.isArray(queryDiversityRaw.sources) && queryDiversityRaw.sources.length
-            ? (queryDiversityRaw.sources.filter((s: unknown) => typeof s === 'string') as Array<'google-trends' | 'reddit' | 'news' | 'wikipedia' | 'local-fallback'>)
+            ? (queryDiversityRaw.sources.filter((s: unknown) => typeof s === 'string') as Array<'google-trends' | 'reddit' | 'news' | 'cn-news' | 'wikipedia' | 'local-fallback'>)
             : undefined,
         maxQueriesPerSource: typeof queryDiversityRaw.maxQueriesPerSource === 'number' ? queryDiversityRaw.maxQueriesPerSource : undefined,
         cacheMinutes: typeof queryDiversityRaw.cacheMinutes === 'number' ? queryDiversityRaw.cacheMinutes : undefined
